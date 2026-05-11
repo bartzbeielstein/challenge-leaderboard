@@ -19,13 +19,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-from spotforecast2_safe.downloader.entsoe import download_new_data
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -35,21 +34,61 @@ COUNTRY = "DE"
 
 
 def fetch_ground_truth(target_date: str) -> pd.Series:
-    """Pull ENTSO-E final-load für den Zieltag (00:00–23:00 UTC)."""
+    """Pull ENTSO-E final-load für den Zieltag (00:00–23:00 UTC).
+
+    Verwendet das Muster aus Kapitel 02: `download_new_data` schreibt
+    `interim/energy_load.csv` unter `$SPOTFORECAST2_DATA`, anschließend
+    liest `fetch_data` die Datei. Wir nutzen ein temporäres
+    Cache-Verzeichnis, damit aufeinanderfolgende Score-Läufe sich nicht
+    ins Gehege kommen (Kompatibilität mit GitHub-Actions-Runner).
+    """
     api_key = os.environ.get("ENTSOE_API_KEY")
     if not api_key:
         raise RuntimeError("ENTSOE_API_KEY ist nicht gesetzt")
 
     start = datetime.fromisoformat(f"{target_date}T00:00:00").replace(tzinfo=timezone.utc)
     end = start + timedelta(hours=23)
-    df = download_new_data(
-        api_key=api_key,
-        country_code=COUNTRY,
-        start=start.strftime("%Y%m%d%H%M"),
-        end=end.strftime("%Y%m%d%H%M"),
-        force=True,
-    )
-    y = df["load"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        data_home = Path(tmp) / "spotforecast2_data"
+        (data_home / "raw").mkdir(parents=True, exist_ok=True)
+        os.environ["SPOTFORECAST2_DATA"] = str(data_home)
+
+        from spotforecast2_safe.data.fetch_data import fetch_data, get_data_home
+        from spotforecast2_safe.downloader.entsoe import download_new_data
+
+        download_new_data(
+            api_key=api_key,
+            country_code=COUNTRY,
+            start=start.strftime("%Y%m%d%H%M"),
+            end=end.strftime("%Y%m%d%H%M"),
+            force=True,
+        )
+
+        interim = get_data_home() / "interim" / "energy_load.csv"
+        if not interim.exists():
+            raise RuntimeError(
+                f"ENTSO-E-Download lieferte keine CSV unter {interim}. "
+                f"Token gültig? Datum {target_date} außerhalb des "
+                f"final-load-Veröffentlichungsfensters?"
+            )
+
+        df = fetch_data(filename=str(interim))
+
+    df.index = pd.to_datetime(df.index, utc=True)
+    load_col = next((c for c in df.columns if "Actual" in c and "Load" in c), None)
+    if load_col is None:
+        raise RuntimeError(
+            f"Keine 'Actual Load'-Spalte gefunden. Vorhandene Spalten: "
+            f"{list(df.columns)}"
+        )
+    y = df[load_col].astype(float).rename("load")
+    if y.index.inferred_freq != "h":
+        y = y.resample("h").mean()
+
+    target_hours = pd.date_range(start, periods=24, freq="h", tz="UTC")
+    y = y.reindex(target_hours)
+
     if y.isna().any():
         # CR-3: lieber abbrechen als raten — Scoring wird auf nächsten
         # Tag verschoben (Action retried morgen).
@@ -57,8 +96,6 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
             f"ENTSO-E final-load enthält NaN für {target_date}: "
             f"{int(y.isna().sum())} fehlende Stunden"
         )
-    if len(y) != 24:
-        raise RuntimeError(f"ENTSO-E lieferte {len(y)} Stunden, erwartet 24")
     return y
 
 
