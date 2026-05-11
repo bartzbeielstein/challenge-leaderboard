@@ -6,4 +6,13 @@
 #       github_handles: [<gh-handle>, ...] # darf PRs mergen
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
-teams: []
+teams:
+  - id: a_team
+    display_name: "Das A Team"
+    github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
+  - id: syntaxerror
+    display_name: "Syntaxerror"
+    github_handles: [lriethk, timmyhaeger,linus-thk]
+  - id: team_fabinalii
+    display_name: "Team Fabinalii"
+    github_handles: [akiev, feith, zakharuk]
