@@ -1,9 +1,11 @@
 name: Validate Submission PR
 
+# Triggered on every PR (no `paths` filter) so the `validate` status check
+# this workflow produces is available for branch protection on `main`.
+# Non-submission PRs (e.g. automated score updates from score-daily.yml,
+# workflow/config tweaks) pass through the Diff-prüfen step with a no-op.
 on:
   pull_request:
-    paths:
-      - "submissions/**"
 
 permissions:
   contents: read
@@ -17,12 +19,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Diff prüfen (genau eine CSV pro PR)
+      - name: Diff prüfen (genau eine CSV pro PR, sonst pass-through)
         id: diff
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE_SHA" "$HEAD_SHA" -- 'submissions/**')
+          if [[ ${#CHANGED[@]} -eq 0 ]]; then
+            echo "[validate] PR berührt keine Submission — pass-through (Non-Submission-Änderung)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ ${#CHANGED[@]} -ne 1 ]]; then
             echo "::error::PR muss genau eine Submission ändern oder hinzufügen (gefunden: ${#CHANGED[@]})."
             printf '%s\n' "${CHANGED[@]}" >&2
@@ -31,13 +38,16 @@ jobs:
           echo "path=${CHANGED[0]}" >> "$GITHUB_OUTPUT"
 
       - uses: astral-sh/setup-uv@v3
+        if: steps.diff.outputs.skip != 'true'
         with:
           enable-cache: true
 
       - name: Python-Stack
+        if: steps.diff.outputs.skip != 'true'
         run: uv sync --frozen
 
       - name: Submission validieren
+        if: steps.diff.outputs.skip != 'true'
         env:
           PYTHONHASHSEED: "0"
         run: |
