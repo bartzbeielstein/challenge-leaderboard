@@ -19,3 +19,9 @@ teams:
   - id: team_4
     display_name: "Team 4"
     github_handles: [bartzbeielstein]
+  - id: team_neura
+    display_name: "Team Neura"
+    github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
+  - id: hot_rod
+    display_name: "Hot Rod"
+    github_handles: [soheilayati, msteffge, erikbirkholz, henning_fritz.delius]
