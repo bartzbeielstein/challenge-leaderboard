@@ -10,8 +10,15 @@ on:
         required: false
         default: ""
 
+# Direkter `git push` auf `main` ist durch Branch Protection
+# (`required_status_checks: ['validate']`) blockiert.  Wir routen den
+# Score-Stand deshalb über einen automatisch erzeugten PR, den die
+# pass-through-Variante von `validate-pr.yml` abnickt und der
+# `peter-evans/enable-pull-request-automerge`-Schritt anschließend
+# squasht.  `pull-requests: write` wird hier zusätzlich benötigt.
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   score:
@@ -43,14 +50,32 @@ jobs:
       - name: Scoring ausführen
         run: uv run python scripts/score_day.py --date "${{ steps.target.outputs.date }}"
 
-      - name: Score-Stand committen
-        run: |
-          if [[ -n $(git status --porcelain data/scores.parquet) ]]; then
-            git config user.name  "challenge-bot"
-            git config user.email "challenge-bot@users.noreply.github.com"
-            git add data/scores.parquet
-            git commit -m "score: Tageslauf ${{ steps.target.outputs.date }}"
-            git push
-          else
-            echo "[score-daily] Keine neuen Scores für ${{ steps.target.outputs.date }}."
-          fi
+      - name: Score-Stand-PR öffnen
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          add-paths: data/scores.parquet
+          branch: bot/scores-${{ steps.target.outputs.date }}
+          delete-branch: true
+          commit-message: "score: Tageslauf ${{ steps.target.outputs.date }}"
+          title: "score: Tageslauf ${{ steps.target.outputs.date }}"
+          body: |
+            Automatisierter Score-Stand für den Zieltag **${{ steps.target.outputs.date }}**.
+
+            Erzeugt von `.github/workflows/score-daily.yml` (`scripts/score_day.py`).
+            `validate-pr.yml` nickt diesen PR pass-through ab (keine `submissions/**`-Änderungen);
+            anschließend squasht `peter-evans/enable-pull-request-automerge` ihn nach `main`.
+
+      - name: Auto-merge aktivieren
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        continue-on-error: true
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: squash
+
+      - name: Kein Score, kein PR
+        if: steps.cpr.outputs.pull-request-operation == ''
+        run: echo "[score-daily] Keine neuen Scores für ${{ steps.target.outputs.date }} (oder identisch zu HEAD)."
