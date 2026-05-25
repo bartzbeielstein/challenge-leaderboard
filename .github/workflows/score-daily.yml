@@ -54,7 +54,7 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SCORE_BOT_TOKEN }}
           add-paths: data/scores.parquet
           branch: bot/scores-${{ steps.target.outputs.date }}
           delete-branch: true
@@ -72,7 +72,7 @@ jobs:
         continue-on-error: true
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SCORE_BOT_TOKEN }}
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
           merge-method: squash
 
