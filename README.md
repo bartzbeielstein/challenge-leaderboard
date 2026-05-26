@@ -29,45 +29,8 @@ gebaut und auf GitHub Pages publiziert.
 1. Forken Sie dieses Repo.
 2. Lokal clonen, `pyproject.toml` per `uv sync` installieren.
 3. Submission lokal erzeugen (siehe `make_submission.py` in Kapitel 12).
-4. Submission in **zwei Schritten** einreichen (siehe nächster Abschnitt).
-
-## Submission-Workflow (zweistufig, Commit-Reveal)
-
-Damit Prognosen nicht vor der Deadline öffentlich sichtbar werden,
-läuft jede Einreichung in zwei PRs:
-
-**Schritt 1 — Commit (vor Deadline `D-1 23:59 Europe/Berlin`)**
-
-```bash
-# CSV lokal erzeugen
-python make_submission.py --date <D>
-
-# SHA-256 berechnen und in <D>.commit schreiben
-python scripts/make_commit.py submissions/<team_id>/<D>.csv
-
-# Nur die .commit-Datei (NICHT die CSV) commiten und PR öffnen
-git add submissions/<team_id>/<D>.commit
-git commit -m "commit: <team_id> <D>"
-git push && gh pr create ...
-```
-
-Der `validate-pr.yml`-Check akzeptiert die `.commit`-Datei nur **vor**
-der Deadline. Die CSV bleibt bis Schritt 2 ungeteilt.
-
-**Schritt 2 — Reveal (nach `D-1 23:59 Europe/Berlin`, vor Scoring um
-`D 07:00 UTC`)**
-
-```bash
-# Dieselbe CSV (unverändert!) commiten und PR öffnen
-git add submissions/<team_id>/<D>.csv
-git commit -m "reveal: <team_id> <D>"
-git push && gh pr create ...
-```
-
-Der Check verifiziert, dass `sha256(CSV) == <D>.commit` ist. Stimmen
-die Hashes nicht überein, wird der PR abgelehnt — die CSV darf
-zwischen Commit und Reveal **byte-genau identisch** bleiben (auch
-Zeilenenden, Encoding, trailing newlines).
+4. Für jede Submission: Feature-Branch → `submissions/<team_id>/<D>.csv`
+   commiten → PR gegen `main` → automatischer Merge bei grünem Check.
 
 ## Verzeichnisbaum
 
@@ -75,13 +38,11 @@ Zeilenenden, Encoding, trailing newlines).
 challenge-leaderboard/
 ├── teams.yml                          # Team-Registry
 ├── pyproject.toml                     # gepinnten Python-Stack für CI
-├── submissions/<team_id>/<D>.commit   # SHA-256(CSV), Commit-Phase
-├── submissions/<team_id>/<D>.csv      # Prognose, Reveal-Phase
+├── submissions/<team_id>/<D>.csv      # Einreichungen
 ├── data/scores.parquet                # append-only Score-Historie
 ├── public/                            # gh-pages-Quelle (build artefact)
 ├── scripts/
-│   ├── validate_submission.py        # Schema + Deadline + Auth + Hash
-│   ├── make_commit.py                # SHA-256-Helfer für die Commit-Phase
+│   ├── validate_submission.py        # Schema + Deadline + Auth-Check
 │   ├── score_day.py                  # täglicher ENTSO-E-Pull + MAE
 │   └── build_leaderboard.py          # Aggregat + HTML
 ├── templates/leaderboard.html.j2
