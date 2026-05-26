@@ -57,10 +57,16 @@ jobs:
             --pr-author "${{ github.event.pull_request.user.login }}"
 
       - name: Auto-merge aktivieren
+        # SCORE_BOT_TOKEN statt GITHUB_TOKEN: bei Fork-PRs ist
+        # GITHUB_TOKEN auf die Berechtigungen des Forks beschränkt,
+        # sodass `gh pr merge -R <upstream>` mit "Could not resolve
+        # to a Repository" abbricht. Der Bot-Token hat Schreibrechte
+        # auf das Upstream-Repo und funktioniert für Fork- wie
+        # Branch-PRs gleich.
         if: success()
         continue-on-error: true
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SCORE_BOT_TOKEN }}
           pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
