@@ -20,8 +20,10 @@
 <body>
   <h1>Lastprognose-Challenge SS26</h1>
   <p class="meta">
-    Bewertung der DE-day-ahead-Lastprognose ({{ rolling_window_days }}-Tage-MAE,
-    aufsteigend). Stand: {{ generated_at }} UTC.
+    Bewertung der DE-day-ahead-Lastprognose (mittlere MAE über alle
+    bewerteten Tage, aufsteigend; fehlende Submissions werden per LOCF
+    aus der jeweils letzten Prognose fortgeschrieben).
+    Stand: {{ generated_at }} UTC.
   </p>
 
   {% if rows %}
@@ -29,9 +31,9 @@
     <thead>
       <tr>
         <th>#</th><th>Team</th>
-        <th class="num">Rolling {{ rolling_window_days }}-d MAE [MW]</th>
-        <th class="num">Cum MAE [MW]</th>
-        <th class="num">Submissions</th>
+        <th class="num">Mean MAE [MW]</th>
+        <th class="num">Sum MAE [MW]</th>
+        <th class="num">Bewertete Tage</th>
       </tr>
     </thead>
     <tbody>
@@ -39,12 +41,8 @@
       <tr>
         <td>{{ row.rank }}</td>
         <td>{{ row.display_name }}</td>
-        <td class="num">
-          {%- if row.rolling_mae is not none and row.rolling_mae == row.rolling_mae -%}
-            {{ "%.2f"|format(row.rolling_mae) }}
-          {%- else -%}—{%- endif -%}
-        </td>
-        <td class="num">{{ "%.2f"|format(row.cum_mae) }}</td>
+        <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
+        <td class="num">{{ "%.2f"|format(row.sum_mae) }}</td>
         <td class="num">{{ row.n_submissions }}</td>
       </tr>
     {% endfor %}
