@@ -15,7 +15,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -37,7 +37,7 @@ jobs:
           fi
           echo "path=${CHANGED[0]}" >> "$GITHUB_OUTPUT"
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
         if: steps.diff.outputs.skip != 'true'
         with:
           enable-cache: true
