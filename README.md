@@ -70,8 +70,12 @@ Nur Personen aus `github_handles` dürfen PRs für dieses Team mergen
 ## Score-Logik
 
 - **Primär**: MAE [MW] über die 24 Stunden eines Zieltages.
-- **Aggregat (öffentliches Ranking)**: Rolling 7-day mean MAE.
-- **Tie-Break**: kumulative MAE → Anzahl gültiger Submissions.
+- **Aggregat (öffentliches Ranking)**: mittlere MAE = Summe der
+  Tages-MAEs / Anzahl bewerteter Tage (aufsteigend).
+- **LOCF**: Reicht ein Team an einem Zieltag keine Prognose ein, wird
+  die jeweils letzte vorhandene Submission des Teams fortgeschrieben
+  (last observation carried forward) und zählt als bewerteter Tag.
+- **Tie-Break**: Anzahl bewerteter Tage (absteigend).
 
 Details und die Formeln in `lecture/12_challenge.qmd` (§
 "Bewertungsmethodik im Detail").

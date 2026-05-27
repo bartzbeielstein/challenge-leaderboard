@@ -1,14 +1,13 @@
 """
 build_leaderboard.py
 
-Liest data/scores.parquet, aggregiert pro Team (rolling 7-day MAE und
-kumulative MAE seit Kickoff) und rendert public/index.html sowie
-public/data/scores.json.
+Liest data/scores.parquet, aggregiert pro Team die durchschnittliche
+MAE (Summe der MAEs / Anzahl bewerteter Tage) und rendert
+public/index.html sowie public/data/scores.json.
 
 Ranking-Logik:
-  Hauptranking   = aufsteigend nach rolling 7-day mean MAE
-  Tie-Break 1    = aufsteigend nach kumulativer MAE
-  Tie-Break 2    = absteigend nach Anzahl gültiger Submissions
+  Hauptranking   = aufsteigend nach mittlerer MAE
+  Tie-Break      = absteigend nach Anzahl bewerteter Tage
 """
 from __future__ import annotations
 
@@ -27,8 +26,6 @@ TEAMS_PATH = REPO_ROOT / "teams.yml"
 PUBLIC_DIR = REPO_ROOT / "public"
 TEMPLATE_DIR = REPO_ROOT / "templates"
 
-ROLLING_WINDOW_DAYS = 7
-
 
 def load_teams() -> dict[str, str]:
     data = yaml.safe_load(TEAMS_PATH.read_text())
@@ -38,31 +35,63 @@ def load_teams() -> dict[str, str]:
 def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     if scores.empty:
         return pd.DataFrame(columns=[
-            "team_id", "display_name", "rolling_mae", "cum_mae", "n_submissions",
+            "team_id", "display_name", "mean_mae", "sum_mae", "n_submissions",
         ])
-    scores = scores.copy()
-    scores["target_date"] = pd.to_datetime(scores["target_date"])
-    today = pd.Timestamp.utcnow().normalize().tz_localize(None)
-    cutoff = today - pd.Timedelta(days=ROLLING_WINDOW_DAYS)
-    rolling = (
-        scores[scores["target_date"] > cutoff]
-        .groupby("team_id")["mae"].mean()
-        .rename("rolling_mae")
-    )
-    cum = scores.groupby("team_id")["mae"].mean().rename("cum_mae")
+    sum_mae = scores.groupby("team_id")["mae"].sum().rename("sum_mae")
+    mean_mae = scores.groupby("team_id")["mae"].mean().rename("mean_mae")
     n = scores.groupby("team_id").size().rename("n_submissions")
-    out = pd.concat([rolling, cum, n], axis=1).reset_index()
+    out = pd.concat([mean_mae, sum_mae, n], axis=1).reset_index()
     out["display_name"] = out["team_id"].map(names).fillna(out["team_id"])
     out = out.sort_values(
-        ["rolling_mae", "cum_mae", "n_submissions"],
-        ascending=[True, True, False],
+        ["mean_mae", "n_submissions"],
+        ascending=[True, False],
         na_position="last",
     ).reset_index(drop=True)
     out.insert(0, "rank", range(1, len(out) + 1))
     return out
 
 
-def render(board: pd.DataFrame) -> None:
+def daily_breakdown(
+    scores: pd.DataFrame, names: dict[str, str], rank_order: list[str]
+) -> dict:
+    """Per-team per-day MAE/RMSE/MAPE breakdown for the secondary table.
+
+    ``rank_order`` fixes the row order to match the main leaderboard; dates
+    are sorted ascending so the most recent column is rightmost. Cells for
+    a (team, date) pair without a score are returned as None — the template
+    renders them as a dash.
+    """
+    if scores.empty:
+        return {"dates": [], "teams": []}
+
+    dates = sorted(scores["target_date"].unique().tolist())
+    lookup = {(r["team_id"], r["target_date"]): r
+              for r in scores.to_dict("records")}
+
+    teams: list[dict] = []
+    for team_id in rank_order:
+        cells = []
+        for d in dates:
+            r = lookup.get((team_id, d))
+            if r is None:
+                cells.append({"mae": None, "rmse": None, "mape": None,
+                              "carried": False})
+            else:
+                cells.append({
+                    "mae": round(float(r["mae"]), 2),
+                    "rmse": round(float(r["rmse"]), 2),
+                    "mape": round(float(r["mape"]), 2),
+                    "carried": bool(r.get("carried_forward", False)),
+                })
+        teams.append({
+            "team_id": team_id,
+            "display_name": names.get(team_id, team_id),
+            "cells": cells,
+        })
+    return {"dates": dates, "teams": teams}
+
+
+def render(board: pd.DataFrame, daily: dict) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
 
@@ -73,12 +102,15 @@ def render(board: pd.DataFrame) -> None:
     template = env.get_template("leaderboard.html.j2")
     html = template.render(
         rows=board.to_dict(orient="records"),
+        daily=daily,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        rolling_window_days=ROLLING_WINDOW_DAYS,
     )
     (PUBLIC_DIR / "index.html").write_text(html)
     (PUBLIC_DIR / "data" / "scores.json").write_text(
         json.dumps(board.to_dict(orient="records"), indent=2, default=str)
+    )
+    (PUBLIC_DIR / "data" / "daily.json").write_text(
+        json.dumps(daily, indent=2, default=str)
     )
 
 
@@ -91,8 +123,10 @@ def main() -> None:
             "team_id", "target_date", "scored_at_utc", "mae", "rmse", "mape",
         ])
     board = aggregate(scores, names)
-    render(board)
-    print(f"[build] Leaderboard mit {len(board)} Teams gerendert -> public/index.html")
+    daily = daily_breakdown(scores, names, list(board["team_id"]))
+    render(board, daily)
+    print(f"[build] Leaderboard mit {len(board)} Teams "
+          f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 
 
 if __name__ == "__main__":

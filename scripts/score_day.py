@@ -2,8 +2,10 @@
 score_day.py
 
 Tagesschritt der Bewertungs-Pipeline. Lädt den ENTSO-E-final-Load für
-den Zieltag, liest alle Submissions submissions/*/<D>.csv ein, berechnet
-MAE/RMSE/MAPE pro Team und hängt die Zeilen an data/scores.parquet an.
+den Zieltag, ermittelt pro registriertem Team die zu bewertende
+Prognose (frische Submission für den Zieltag oder — falls keine vorliegt
+— die letzte vorhandene Submission als LOCF) und hängt MAE/RMSE/MAPE
+an data/scores.parquet an.
 
 Aufruf:
     python scripts/score_day.py --date 2026-05-15
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -25,12 +28,15 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SUBMISSIONS_DIR = REPO_ROOT / "submissions"
 SCORES_PATH = REPO_ROOT / "data" / "scores.parquet"
+TEAMS_PATH = REPO_ROOT / "teams.yml"
 COUNTRY = "DE"
+DATE_CSV_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.csv$")
 
 
 def fetch_ground_truth(target_date: str) -> pd.Series:
@@ -103,8 +109,8 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
     return y
 
 
-def score_submission(forecast: pd.Series, actual: pd.Series) -> dict:
-    err = forecast.values - actual.values
+def score_submission(forecast_values: np.ndarray, actual: pd.Series) -> dict:
+    err = forecast_values - actual.values
     mae = float(np.mean(np.abs(err)))
     rmse = float(np.sqrt(np.mean(err ** 2)))
     nonzero = actual.values != 0
@@ -113,10 +119,37 @@ def score_submission(forecast: pd.Series, actual: pd.Series) -> dict:
     return {"mae": round(mae, 4), "rmse": round(rmse, 4), "mape": round(mape, 4)}
 
 
-def collect_submissions(target_date: str) -> list[tuple[str, Path]]:
-    pattern = f"*/{target_date}.csv"
-    files = sorted(SUBMISSIONS_DIR.glob(pattern))
-    return [(p.parent.name, p) for p in files]
+def load_team_ids() -> list[str]:
+    data = yaml.safe_load(TEAMS_PATH.read_text()) or {}
+    return sorted(t["id"] for t in (data.get("teams") or []))
+
+
+def collect_forecasts(
+    target_date: str, team_ids: list[str]
+) -> list[tuple[str, Path, bool]]:
+    """Pro Team: (team_id, csv-Pfad, carried_forward).
+
+    Frische Submission für den Zieltag bevorzugt; sonst LOCF auf die
+    letzte Submission vor target_date. Teams ohne irgendeine
+    Submission werden übersprungen.
+    """
+    out: list[tuple[str, Path, bool]] = []
+    for team_id in team_ids:
+        team_dir = SUBMISSIONS_DIR / team_id
+        if not team_dir.is_dir():
+            continue
+        exact = team_dir / f"{target_date}.csv"
+        if exact.exists():
+            out.append((team_id, exact, False))
+            continue
+        prior = sorted(
+            p for p in team_dir.glob("*.csv")
+            if DATE_CSV_RE.match(p.name) and p.stem < target_date
+        )
+        if not prior:
+            continue
+        out.append((team_id, prior[-1], True))
+    return out
 
 
 def append_scores(rows: list[dict]) -> None:
@@ -143,23 +176,22 @@ def main() -> int:
     print(f"[score_day] Lade Ground-Truth für {target_date} …")
     actual = fetch_ground_truth(target_date)
 
-    submissions = collect_submissions(target_date)
-    if not submissions:
-        print(f"[score_day] Keine Submissions für {target_date} — fertig.")
+    team_ids = load_team_ids()
+    forecasts = collect_forecasts(target_date, team_ids)
+    if not forecasts:
+        print(f"[score_day] Keine bewertbaren Prognosen für {target_date} — fertig.")
         return 0
 
     rows: list[dict] = []
-    for team_id, path in submissions:
+    for team_id, path, carried in forecasts:
         try:
             sub = pd.read_csv(path)
-            forecast = pd.Series(sub["forecast_mw"].values,
-                                  index=pd.to_datetime(sub["timestamp_utc"]))
-            forecast.index = forecast.index.tz_convert("UTC")
-            actual_aligned = actual.reindex(forecast.index)
-            if actual_aligned.isna().any():
-                print(f"[score_day] {team_id}: timestamp-Misalignment, übersprungen")
+            forecast_values = sub["forecast_mw"].to_numpy(dtype=float)
+            if len(forecast_values) != 24:
+                print(f"[score_day] {team_id}: 24 Zeilen erwartet, "
+                      f"{len(forecast_values)} gefunden ({path.name}); übersprungen")
                 continue
-            metrics = score_submission(forecast, actual_aligned)
+            metrics = score_submission(forecast_values, actual)
         except Exception as exc:
             print(f"[score_day] {team_id}: Fehler ({exc}); übersprungen")
             continue
@@ -167,10 +199,13 @@ def main() -> int:
             "team_id": team_id,
             "target_date": target_date,
             "scored_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source_date": path.stem,
+            "carried_forward": carried,
             **metrics,
         })
+        tag = f" [LOCF aus {path.stem}]" if carried else ""
         print(f"[score_day] {team_id}: MAE={metrics['mae']:.2f} MW "
-              f"RMSE={metrics['rmse']:.2f} MAPE={metrics['mape']:.2f}%")
+              f"RMSE={metrics['rmse']:.2f} MAPE={metrics['mape']:.2f}%{tag}")
 
     if rows:
         append_scores(rows)

@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Lastprognose-Challenge SS26 — Leaderboard</title>
+  <title>Lastprognose-Challenge SoSe26 — Leaderboard</title>
   <style>
     body { font-family: "Helvetica Neue", Arial, sans-serif; max-width: 880px;
            margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
@@ -15,13 +15,18 @@
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tr:first-child td { font-weight: 600; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; }
+    h2 { margin-top: 2.5rem; }
+    td.locf { color: #888; }
+    td.miss { color: #ccc; text-align: right; }
   </style>
 </head>
 <body>
-  <h1>Lastprognose-Challenge SS26</h1>
+  <h1>Lastprognose-Challenge SoSe26</h1>
   <p class="meta">
-    Bewertung der DE-day-ahead-Lastprognose ({{ rolling_window_days }}-Tage-MAE,
-    aufsteigend). Stand: {{ generated_at }} UTC.
+    Bewertung der DE-day-ahead-Lastprognose (mittlere MAE über alle
+    bewerteten Tage, aufsteigend; fehlende Submissions werden per LOCF
+    aus der jeweils letzten Prognose fortgeschrieben).
+    Stand: {{ generated_at }} UTC.
   </p>
 
   {% if rows %}
@@ -29,9 +34,9 @@
     <thead>
       <tr>
         <th>#</th><th>Team</th>
-        <th class="num">Rolling {{ rolling_window_days }}-d MAE [MW]</th>
-        <th class="num">Cum MAE [MW]</th>
-        <th class="num">Submissions</th>
+        <th class="num">Mean MAE [MW]</th>
+        <th class="num">Sum MAE [MW]</th>
+        <th class="num">Bewertete Tage</th>
       </tr>
     </thead>
     <tbody>
@@ -39,12 +44,8 @@
       <tr>
         <td>{{ row.rank }}</td>
         <td>{{ row.display_name }}</td>
-        <td class="num">
-          {%- if row.rolling_mae is not none and row.rolling_mae == row.rolling_mae -%}
-            {{ "%.2f"|format(row.rolling_mae) }}
-          {%- else -%}—{%- endif -%}
-        </td>
-        <td class="num">{{ "%.2f"|format(row.cum_mae) }}</td>
+        <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
+        <td class="num">{{ "%.2f"|format(row.sum_mae) }}</td>
         <td class="num">{{ row.n_submissions }}</td>
       </tr>
     {% endfor %}
@@ -54,8 +55,43 @@
     <p class="empty">Noch keine bewerteten Submissions.</p>
   {% endif %}
 
+  {% if daily and daily.dates %}
+  <h2>Tagesfehler je Team</h2>
   <p class="meta">
-    Daten: <a href="data/scores.json">scores.json</a>.
+    MAE [MW] pro Zieltag. Werte in <span class="locf">grau</span> kennzeichnen
+    eine via LOCF fortgeschriebene Prognose (keine frische Submission für
+    diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
+    Forecast vorlag.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Team</th>
+        {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for team in daily.teams %}
+      <tr>
+        <td>{{ team.display_name }}</td>
+        {% for c in team.cells %}
+          {% if c.mae is none %}
+            <td class="miss">—</td>
+          {% elif c.carried %}
+            <td class="num locf" title="LOCF — fortgeschrieben">{{ "%.2f"|format(c.mae) }}</td>
+          {% else %}
+            <td class="num">{{ "%.2f"|format(c.mae) }}</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <p class="meta">
+    Daten: <a href="data/scores.json">scores.json</a>,
+    <a href="data/daily.json">daily.json</a> (Tagesfehler pro Team).
     Spielregeln: Kapitel 12 des Skripts. Bewertungs-Pipeline:
     <a href="https://github.com/">challenge-leaderboard</a>.
   </p>
