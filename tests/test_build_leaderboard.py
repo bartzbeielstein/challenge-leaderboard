@@ -71,6 +71,43 @@ def test_main_writes_html_and_json(tmp_path):
     assert data[0]["rank"] == 1
 
 
+def test_daily_breakdown_pivots_by_team_and_date():
+    scores = pd.DataFrame([
+        {"team_id": "team_4", "target_date": "2026-05-12",
+         "mae": 1931.26, "rmse": 2362.61, "mape": 3.66, "carried_forward": False},
+        {"team_id": "team_4", "target_date": "2026-05-26",
+         "mae": 3466.19, "rmse": 4090.82, "mape": 6.74, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-05-26",
+         "mae": 1961.51, "rmse": 2236.25, "mape": 3.77, "carried_forward": True},
+    ])
+    names = {"team_4": "Team 4", "hot_rod": "Hot Rod"}
+    out = bl.daily_breakdown(scores, names, ["hot_rod", "team_4"])
+    assert out["dates"] == ["2026-05-12", "2026-05-26"]
+    assert [t["team_id"] for t in out["teams"]] == ["hot_rod", "team_4"]
+    assert out["teams"][0]["cells"][0]["mae"] is None
+    assert out["teams"][0]["cells"][1]["mae"] == 1961.51
+    assert out["teams"][0]["cells"][1]["carried"] is True
+    assert out["teams"][1]["cells"][0]["mae"] == 1931.26
+    assert out["teams"][1]["cells"][1]["carried"] is False
+
+
+def test_main_writes_daily_section_in_html(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-12", "mae": 1931.26,
+         "rmse": 2362.61, "mape": 3.66, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 1961.51,
+         "rmse": 2236.25, "mape": 3.77, "carried_forward": False},
+    ])
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "Tagesfehler je Team" in html
+    assert "2026-05-12" in html
+    assert "2026-05-26" in html
+    daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
+    assert daily["dates"] == ["2026-05-12", "2026-05-26"]
+
+
 def test_main_handles_empty_scores(tmp_path):
     _seed_teams(tmp_path)
     # SCORES_PATH does not exist -> main must still render an (empty) page.

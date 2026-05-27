@@ -51,7 +51,47 @@ def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     return out
 
 
-def render(board: pd.DataFrame) -> None:
+def daily_breakdown(
+    scores: pd.DataFrame, names: dict[str, str], rank_order: list[str]
+) -> dict:
+    """Per-team per-day MAE/RMSE/MAPE breakdown for the secondary table.
+
+    ``rank_order`` fixes the row order to match the main leaderboard; dates
+    are sorted ascending so the most recent column is rightmost. Cells for
+    a (team, date) pair without a score are returned as None — the template
+    renders them as a dash.
+    """
+    if scores.empty:
+        return {"dates": [], "teams": []}
+
+    dates = sorted(scores["target_date"].unique().tolist())
+    lookup = {(r["team_id"], r["target_date"]): r
+              for r in scores.to_dict("records")}
+
+    teams: list[dict] = []
+    for team_id in rank_order:
+        cells = []
+        for d in dates:
+            r = lookup.get((team_id, d))
+            if r is None:
+                cells.append({"mae": None, "rmse": None, "mape": None,
+                              "carried": False})
+            else:
+                cells.append({
+                    "mae": round(float(r["mae"]), 2),
+                    "rmse": round(float(r["rmse"]), 2),
+                    "mape": round(float(r["mape"]), 2),
+                    "carried": bool(r.get("carried_forward", False)),
+                })
+        teams.append({
+            "team_id": team_id,
+            "display_name": names.get(team_id, team_id),
+            "cells": cells,
+        })
+    return {"dates": dates, "teams": teams}
+
+
+def render(board: pd.DataFrame, daily: dict) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
 
@@ -62,11 +102,15 @@ def render(board: pd.DataFrame) -> None:
     template = env.get_template("leaderboard.html.j2")
     html = template.render(
         rows=board.to_dict(orient="records"),
+        daily=daily,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
     (PUBLIC_DIR / "data" / "scores.json").write_text(
         json.dumps(board.to_dict(orient="records"), indent=2, default=str)
+    )
+    (PUBLIC_DIR / "data" / "daily.json").write_text(
+        json.dumps(daily, indent=2, default=str)
     )
 
 
@@ -79,8 +123,10 @@ def main() -> None:
             "team_id", "target_date", "scored_at_utc", "mae", "rmse", "mape",
         ])
     board = aggregate(scores, names)
-    render(board)
-    print(f"[build] Leaderboard mit {len(board)} Teams gerendert -> public/index.html")
+    daily = daily_breakdown(scores, names, list(board["team_id"]))
+    render(board, daily)
+    print(f"[build] Leaderboard mit {len(board)} Teams "
+          f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 
 
 if __name__ == "__main__":

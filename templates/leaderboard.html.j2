@@ -15,6 +15,9 @@
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tr:first-child td { font-weight: 600; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; }
+    h2 { margin-top: 2.5rem; }
+    td.locf { color: #888; }
+    td.miss { color: #ccc; text-align: right; }
   </style>
 </head>
 <body>
@@ -52,8 +55,43 @@
     <p class="empty">Noch keine bewerteten Submissions.</p>
   {% endif %}
 
+  {% if daily and daily.dates %}
+  <h2>Tagesfehler je Team</h2>
   <p class="meta">
-    Daten: <a href="data/scores.json">scores.json</a>.
+    MAE [MW] pro Zieltag. Werte in <span class="locf">grau</span> kennzeichnen
+    eine via LOCF fortgeschriebene Prognose (keine frische Submission für
+    diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
+    Forecast vorlag.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Team</th>
+        {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for team in daily.teams %}
+      <tr>
+        <td>{{ team.display_name }}</td>
+        {% for c in team.cells %}
+          {% if c.mae is none %}
+            <td class="miss">—</td>
+          {% elif c.carried %}
+            <td class="num locf" title="LOCF — fortgeschrieben">{{ "%.2f"|format(c.mae) }}</td>
+          {% else %}
+            <td class="num">{{ "%.2f"|format(c.mae) }}</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <p class="meta">
+    Daten: <a href="data/scores.json">scores.json</a>,
+    <a href="data/daily.json">daily.json</a> (Tagesfehler pro Team).
     Spielregeln: Kapitel 12 des Skripts. Bewertungs-Pipeline:
     <a href="https://github.com/">challenge-leaderboard</a>.
   </p>
