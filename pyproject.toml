@@ -12,6 +12,16 @@ dependencies = [
     "entsoe-py>=0.6",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "freezegun>=1.5",
+]
+
 [tool.uv]
 # Pinnt indirekte Abhängigkeiten via uv.lock (CR-4: minimale, versionierte
 # Sperrliste verbotener Abhängigkeiten; CR-2: bitweise Reproduzierbarkeit).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
