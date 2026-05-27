@@ -1,7 +1,7 @@
 [project]
 name = "challenge-leaderboard"
 version = "0.1.0"
-description = "Scoring + Leaderboard für die SS26-Lastprognose-Challenge."
+description = "Scoring + Leaderboard für die SoSe26-Lastprognose-Challenge."
 requires-python = ">=3.13"
 dependencies = [
     "spotforecast2-safe>=3.0.0,<4",

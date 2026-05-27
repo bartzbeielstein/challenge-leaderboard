@@ -68,7 +68,7 @@ gh repo create challenge-leaderboard \
     --public \
     --source . \
     --remote origin \
-    --description "Live-Lastprognose-Challenge SS26 — Bewertung & Leaderboard" \
+    --description "Live-Lastprognose-Challenge SoSe26 — Bewertung & Leaderboard" \
     --push
 ```
 
