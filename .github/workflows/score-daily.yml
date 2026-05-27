@@ -2,7 +2,7 @@ name: Daily Scoring
 
 on:
   schedule:
-    - cron: "0 4 * * *"     # täglich 04:00 UTC (05:00/06:00 CET/CEST)
+    - cron: "0 7 * * *"     # täglich 07:00 UTC (08:00/09:00 CEST/CET)
   workflow_dispatch:
     inputs:
       target_date:

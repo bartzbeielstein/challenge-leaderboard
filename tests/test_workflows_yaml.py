@@ -20,11 +20,11 @@ def _load(name: str) -> dict:
     return yaml.safe_load((WF / name).read_text())
 
 
-def test_score_daily_has_04_utc_cron():
+def test_score_daily_has_07_utc_cron():
     wf = _load("score-daily.yml")
     on = wf[True] if True in wf else wf["on"]  # PyYAML quirk: `on` -> True
     crons = [s["cron"] for s in on["schedule"]]
-    assert "0 4 * * *" in crons
+    assert "0 7 * * *" in crons
 
 
 def test_score_daily_workflow_dispatch_accepts_target_date():
