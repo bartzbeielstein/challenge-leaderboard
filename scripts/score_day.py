@@ -39,6 +39,25 @@ COUNTRY = "DE"
 DATE_CSV_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.csv$")
 
 
+def scoring_window(target_date: str) -> tuple[datetime, datetime, pd.DatetimeIndex]:
+    """UTC-Fenster für den Zieltag.
+
+    Liefert (fetch_start, fetch_end, target_hours):
+      - target_hours: die 24 zu bewertenden Stunden D 00:00–23:00 UTC.
+      - fetch_start/fetch_end: ENTSO-E-Download-Fenster mit Puffer (6 h
+        davor, 5 h danach), damit (i) die letzten 15-Min-Werte für die
+        23:00-Stunde komplett sind und (ii) ein Quartal-Ausreißer am
+        Tagesrand nicht den ganzen Tag NaN macht.
+
+    Alles UTC — keine lokale Zeitzone (CR: UTC-only).
+    """
+    start = datetime.fromisoformat(f"{target_date}T00:00:00").replace(tzinfo=timezone.utc)
+    fetch_start = start - timedelta(hours=6)
+    fetch_end = start + timedelta(hours=29)  # 24h Zieltag + 5h Puffer
+    target_hours = pd.date_range(start, periods=24, freq="h", tz="UTC")
+    return fetch_start, fetch_end, target_hours
+
+
 def fetch_ground_truth(target_date: str) -> pd.Series:
     """Pull ENTSO-E final-load für den Zieltag (00:00–23:00 UTC).
 
@@ -52,12 +71,7 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
     if not api_key:
         raise RuntimeError("ENTSOE_API_KEY ist nicht gesetzt")
 
-    start = datetime.fromisoformat(f"{target_date}T00:00:00").replace(tzinfo=timezone.utc)
-    # Mit Puffer vor + nach dem Zieltag laden, damit (i) die letzten
-    # 15-Min-Werte für die 23:00-Stunde komplett sind und (ii) ein
-    # eventueller Quartal-Ausreißer am Tagesrand nicht den ganzen Tag NaN macht.
-    fetch_start = start - timedelta(hours=6)
-    fetch_end = start + timedelta(hours=29)  # 24h Zieltag + 5h Puffer
+    fetch_start, fetch_end, target_hours = scoring_window(target_date)
 
     with tempfile.TemporaryDirectory() as tmp:
         data_home = Path(tmp) / "spotforecast2_data"
@@ -96,7 +110,6 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
     if y.index.inferred_freq != "h":
         y = y.resample("h").mean()
 
-    target_hours = pd.date_range(start, periods=24, freq="h", tz="UTC")
     y = y.reindex(target_hours)
 
     if y.isna().any():

@@ -2,7 +2,7 @@ name: Daily Scoring
 
 on:
   schedule:
-    - cron: "0 7 * * *"     # täglich 07:00 UTC (08:00/09:00 CEST/CET)
+    - cron: "0 7 * * *"     # täglich 07:00 UTC (ENTSO-E final-load i. d. R. verfügbar)
   workflow_dispatch:
     inputs:
       target_date:
