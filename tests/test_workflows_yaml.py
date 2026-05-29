@@ -34,6 +34,15 @@ def test_score_daily_workflow_dispatch_accepts_target_date():
     assert "target_date" in inputs
 
 
+def test_score_daily_uses_catch_up():
+    # The scoring step must pass --catch-up so a skipped cron self-heals.
+    body = (WF / "score-daily.yml").read_text()
+    assert "--catch-up" in body, (
+        "score-daily.yml must run score_day.py with --catch-up so a missed "
+        "scheduled run is recovered on the next run."
+    )
+
+
 def test_build_and_deploy_listens_to_score_daily_name_exact():
     sd = _load("score-daily.yml")
     bd = _load("build-and-deploy.yml")
