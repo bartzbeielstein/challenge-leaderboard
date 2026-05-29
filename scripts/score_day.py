@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +39,25 @@ COUNTRY = "DE"
 DATE_CSV_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.csv$")
 
 
+def scoring_window(target_date: str) -> tuple[datetime, datetime, pd.DatetimeIndex]:
+    """UTC-Fenster für den Zieltag.
+
+    Liefert (fetch_start, fetch_end, target_hours):
+      - target_hours: die 24 zu bewertenden Stunden D 00:00–23:00 UTC.
+      - fetch_start/fetch_end: ENTSO-E-Download-Fenster mit Puffer (6 h
+        davor, 5 h danach), damit (i) die letzten 15-Min-Werte für die
+        23:00-Stunde komplett sind und (ii) ein Quartal-Ausreißer am
+        Tagesrand nicht den ganzen Tag NaN macht.
+
+    Alles UTC — keine lokale Zeitzone (CR: UTC-only).
+    """
+    start = datetime.fromisoformat(f"{target_date}T00:00:00").replace(tzinfo=timezone.utc)
+    fetch_start = start - timedelta(hours=6)
+    fetch_end = start + timedelta(hours=29)  # 24h Zieltag + 5h Puffer
+    target_hours = pd.date_range(start, periods=24, freq="h", tz="UTC")
+    return fetch_start, fetch_end, target_hours
+
+
 def fetch_ground_truth(target_date: str) -> pd.Series:
     """Pull ENTSO-E final-load für den Zieltag (00:00–23:00 UTC).
 
@@ -52,12 +71,7 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
     if not api_key:
         raise RuntimeError("ENTSOE_API_KEY ist nicht gesetzt")
 
-    start = datetime.fromisoformat(f"{target_date}T00:00:00").replace(tzinfo=timezone.utc)
-    # Mit Puffer vor + nach dem Zieltag laden, damit (i) die letzten
-    # 15-Min-Werte für die 23:00-Stunde komplett sind und (ii) ein
-    # eventueller Quartal-Ausreißer am Tagesrand nicht den ganzen Tag NaN macht.
-    fetch_start = start - timedelta(hours=6)
-    fetch_end = start + timedelta(hours=29)  # 24h Zieltag + 5h Puffer
+    fetch_start, fetch_end, target_hours = scoring_window(target_date)
 
     with tempfile.TemporaryDirectory() as tmp:
         data_home = Path(tmp) / "spotforecast2_data"
@@ -96,7 +110,6 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
     if y.index.inferred_freq != "h":
         y = y.resample("h").mean()
 
-    target_hours = pd.date_range(start, periods=24, freq="h", tz="UTC")
     y = y.reindex(target_hours)
 
     if y.isna().any():
@@ -167,23 +180,43 @@ def append_scores(rows: list[dict]) -> None:
     combined.to_parquet(SCORES_PATH, index=False)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--date", required=True, help="Zieltag YYYY-MM-DD (UTC)")
-    args = parser.parse_args()
-    target_date = args.date
+def scored_dates() -> set[str]:
+    """Set of target_date values that already have a row in scores.parquet."""
+    if not SCORES_PATH.exists():
+        return set()
+    df = pd.read_parquet(SCORES_PATH)
+    if "target_date" not in df.columns:
+        return set()
+    return set(df["target_date"].astype(str))
 
-    print(f"[score_day] Lade Ground-Truth für {target_date} …")
+
+def days_to_score(target_date: str, catch_up: int) -> list[str]:
+    """Days this run should attempt, oldest first.
+
+    Always the primary `target_date`, plus any day in the trailing
+    `catch_up`-day window that has no row in scores.parquet yet. This is
+    the self-healing property: if a daily cron is skipped (GitHub delays
+    or drops scheduled runs under load), the next run still picks up the
+    missed day instead of dropping it. Already-scored older days are left
+    untouched — catch-up never silently re-scores a day that was graded.
+    """
+    target = date.fromisoformat(target_date)
+    window = {target - timedelta(days=i) for i in range(max(catch_up, 1))}
+    already = scored_dates()
+    due = {d.isoformat() for d in window if d.isoformat() not in already}
+    due.add(target_date)  # primary always (re)scored; append_scores is idempotent
+    return sorted(due)
+
+
+def score_one_day(target_date: str, team_ids: list[str]) -> list[dict]:
+    """Fetch actuals for one day and score every team's forecast.
+
+    Raises (via `fetch_ground_truth`) if the day's ENTSO-E final actuals
+    are not yet available/complete; the caller defers that day.
+    """
     actual = fetch_ground_truth(target_date)
-
-    team_ids = load_team_ids()
-    forecasts = collect_forecasts(target_date, team_ids)
-    if not forecasts:
-        print(f"[score_day] Keine bewertbaren Prognosen für {target_date} — fertig.")
-        return 0
-
     rows: list[dict] = []
-    for team_id, path, carried in forecasts:
+    for team_id, path, carried in collect_forecasts(target_date, team_ids):
         try:
             sub = pd.read_csv(path)
             forecast_values = sub["forecast_mw"].to_numpy(dtype=float)
@@ -206,10 +239,51 @@ def main() -> int:
         tag = f" [LOCF aus {path.stem}]" if carried else ""
         print(f"[score_day] {team_id}: MAE={metrics['mae']:.2f} MW "
               f"RMSE={metrics['rmse']:.2f} MAPE={metrics['mape']:.2f}%{tag}")
+    return rows
 
-    if rows:
-        append_scores(rows)
-        print(f"[score_day] {len(rows)} Zeilen in data/scores.parquet geschrieben.")
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", required=True, help="Zieltag YYYY-MM-DD (UTC)")
+    parser.add_argument(
+        "--catch-up", type=int, default=1, metavar="N",
+        help="Zusätzlich alle noch ungescorten Tage der letzten N Tage "
+             "nachscoren (Standard 1 = nur --date). Heilt ausgefallene "
+             "Cron-Läufe selbst.",
+    )
+    args = parser.parse_args()
+
+    team_ids = load_team_ids()
+    due = days_to_score(args.date, args.catch_up)
+    if len(due) > 1:
+        print(f"[score_day] catch-up={args.catch_up}: zu scoren {', '.join(due)}")
+
+    all_rows: list[dict] = []
+    deferred: list[str] = []
+    for d in due:
+        print(f"[score_day] Lade Ground-Truth für {d} …")
+        try:
+            all_rows.extend(score_one_day(d, team_ids))
+        except RuntimeError as exc:
+            # Actuals noch nicht veröffentlicht / unvollständig — der Tag
+            # bleibt ungescort und wird vom nächsten Lauf erneut versucht.
+            print(f"[score_day] {d}: aufgeschoben — {exc}")
+            deferred.append(d)
+
+    if all_rows:
+        append_scores(all_rows)
+        print(f"[score_day] {len(all_rows)} Zeilen in data/scores.parquet geschrieben.")
+    else:
+        print("[score_day] Keine bewertbaren Prognosen — nichts geschrieben.")
+    if deferred:
+        print(f"[score_day] Aufgeschoben (Actuals noch nicht verfügbar): "
+              f"{', '.join(deferred)}")
+
+    # Nur scheitern, wenn der primäre Zieltag aufgeschoben wurde *und* gar
+    # nichts gescort werden konnte — dann stimmt etwas nicht (z. B. API-Key
+    # fehlt). Ein aufgeschobener Nebentag bei Fortschritt ist kein Fehler.
+    if args.date in deferred and not all_rows:
+        return 1
     return 0
 
 

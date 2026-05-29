@@ -2,7 +2,7 @@ name: Daily Scoring
 
 on:
   schedule:
-    - cron: "0 7 * * *"     # täglich 07:00 UTC (08:00/09:00 CEST/CET)
+    - cron: "0 7 * * *"     # täglich 07:00 UTC (ENTSO-E final-load i. d. R. verfügbar)
   workflow_dispatch:
     inputs:
       target_date:
@@ -48,7 +48,12 @@ jobs:
           echo "[score-daily] Zieltag: $DATE"
 
       - name: Scoring ausführen
-        run: uv run python scripts/score_day.py --date "${{ steps.target.outputs.date }}"
+        # --catch-up 3: zusätzlich zum Zieltag jeden noch ungescorten Tag der
+        # letzten drei Tage nachscoren, falls ein geplanter Cron-Lauf ausfiel
+        # (GitHub verzögert/überspringt scheduled runs unter Last). Klein
+        # genug, um nicht versehentlich alte, bewusst ungescorte Tage per
+        # LOCF nachzutragen.
+        run: uv run python scripts/score_day.py --date "${{ steps.target.outputs.date }}" --catch-up 3
 
       - name: Score-Stand-PR öffnen
         id: cpr
