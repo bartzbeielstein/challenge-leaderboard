@@ -47,10 +47,26 @@ challenge-leaderboard/
 │   └── build_leaderboard.py          # Aggregat + HTML
 ├── templates/leaderboard.html.j2
 └── .github/workflows/
+    ├── ci.yml                          # pytest + actionlint auf jedem PR
     ├── validate-pr.yml
     ├── score-daily.yml
     └── build-and-deploy.yml
 ```
+
+## Tageslauf-Timing & Robustheit
+
+Der Score-Cron läuft **täglich 09:00 UTC** und bewertet „gestern" (UTC).
+ENTSO-E veröffentlicht *Actual Total Load* (6.1.A) regulatorisch bis H+1,
+real treten jedoch TSO-Verzögerungen, einzelne fehlende Stunden (DST) und
+„HTTP 200 + No matching data" auf. 09:00 UTC gibt Sicherheitsmarge nach der
+H+1-Frist der letzten UTC-Stunde (01:00 UTC). Ergänzend härtet
+`score_day.py` den Abruf:
+
+- **Retry/Backoff** bei transienten API-/Netzfehlern.
+- **Sauberes Aufschieben** (`GroundTruthNotReady`) bei unvollständigem Tag —
+  lieber morgen via **Catch-up** nachholen als raten (CR-3).
+- **Lauter Fehlschlag**: kann der *primäre* Zieltag nicht gescort werden,
+  endet der Lauf rot (Alarm); Nebentage werden still nachgeholt.
 
 ## `teams.yml`-Schema
 

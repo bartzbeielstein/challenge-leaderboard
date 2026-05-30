@@ -112,9 +112,9 @@ def test_scoring_window_is_24_utc_hours_of_target():
     assert fetch_end == datetime(2026, 5, 30, 5, 0, tzinfo=timezone.utc)
 
 
-def test_cron_runs_at_07_utc_and_targets_yesterday():
-    # The 07:00 UTC cron scores "yesterday" (UTC): a 2026-05-30 run -> D.
-    run_day = datetime(2026, 5, 30, 7, 0, tzinfo=timezone.utc)
+def test_cron_runs_at_09_utc_and_targets_yesterday():
+    # The 09:00 UTC cron scores "yesterday" (UTC): a 2026-05-30 run -> D.
+    run_day = datetime(2026, 5, 30, 9, 0, tzinfo=timezone.utc)
     target = (run_day.date() - pd.Timedelta(days=1)).isoformat()
     assert target == TARGET
 
@@ -123,7 +123,7 @@ def test_cron_runs_at_07_utc_and_targets_yesterday():
         (SCRIPTS.parent / ".github" / "workflows" / "score-daily.yml").read_text()
     )
     on = wf[True] if True in wf else wf["on"]
-    assert "0 7 * * *" in [s["cron"] for s in on["schedule"]]
+    assert "0 9 * * *" in [s["cron"] for s in on["schedule"]]
     # The target-day step must derive yesterday in UTC (`date -u`), never local.
     body = (SCRIPTS.parent / ".github" / "workflows" / "score-daily.yml").read_text()
     assert 'date -u -d "yesterday"' in body
