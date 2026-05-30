@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -58,14 +59,28 @@ def scoring_window(target_date: str) -> tuple[datetime, datetime, pd.DatetimeInd
     return fetch_start, fetch_end, target_hours
 
 
-def fetch_ground_truth(target_date: str) -> pd.Series:
-    """Pull ENTSO-E final-load für den Zieltag (00:00–23:00 UTC).
+class GroundTruthNotReady(RuntimeError):
+    """ENTSO-E-Actuals für den Zieltag sind (noch) nicht vollständig.
+
+    Signalisiert dem Aufrufer „aufschieben und morgen erneut versuchen“ —
+    abgegrenzt von harten Konfigurationsfehlern (fehlender API-Key), die
+    sofort und laut scheitern sollen. Erbt von RuntimeError, damit die
+    bestehende `except RuntimeError`-Defer-Logik in `main()` greift.
+    """
+
+
+def _download_actual_load(target_date: str) -> pd.Series:
+    """Ein ENTSO-E-Abrufversuch → stündliche Actual-Load-Serie.
 
     Verwendet das Muster aus Kapitel 02: `download_new_data` schreibt
     `interim/energy_load.csv` unter `$SPOTFORECAST2_DATA`, anschließend
     liest `fetch_data` die Datei. Wir nutzen ein temporäres
     Cache-Verzeichnis, damit aufeinanderfolgende Score-Läufe sich nicht
     ins Gehege kommen (Kompatibilität mit GitHub-Actions-Runner).
+
+    Liefert die auf die 24 Zielstunden reindizierte Serie — die NaN
+    enthalten *kann*, wenn der Tag (noch) unvollständig veröffentlicht ist.
+    Die Vollständigkeitsprüfung übernimmt `fetch_ground_truth`.
     """
     api_key = os.environ.get("ENTSOE_API_KEY")
     if not api_key:
@@ -91,10 +106,14 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
 
         interim = get_data_home() / "interim" / "energy_load.csv"
         if not interim.exists():
-            raise RuntimeError(
-                f"ENTSO-E-Download lieferte keine CSV unter {interim}. "
-                f"Token gültig? Datum {target_date} außerhalb des "
-                f"final-load-Veröffentlichungsfensters?"
+            # Kein CSV → ENTSO-E lieferte (noch) keine Daten ("No matching
+            # data found" kommt als HTTP 200 ohne Inhalt). Als „noch nicht
+            # bereit“ behandeln, damit der Tag aufgeschoben statt hart
+            # abgebrochen wird.
+            raise GroundTruthNotReady(
+                f"ENTSO-E-Download lieferte keine CSV unter {interim} "
+                f"(Datum {target_date} evtl. außerhalb des "
+                f"final-load-Veröffentlichungsfensters)."
             )
 
         df = fetch_data(filename=str(interim))
@@ -110,16 +129,62 @@ def fetch_ground_truth(target_date: str) -> pd.Series:
     if y.index.inferred_freq != "h":
         y = y.resample("h").mean()
 
-    y = y.reindex(target_hours)
+    return y.reindex(target_hours)
 
-    if y.isna().any():
-        # CR-3: lieber abbrechen als raten — Scoring wird auf nächsten
-        # Tag verschoben (Action retried morgen).
-        raise RuntimeError(
-            f"ENTSO-E final-load enthält NaN für {target_date}: "
-            f"{int(y.isna().sum())} fehlende Stunden"
-        )
-    return y
+
+def fetch_ground_truth(
+    target_date: str,
+    *,
+    attempts: int = 4,
+    base_delay: float = 5.0,
+    sleep=time.sleep,
+) -> pd.Series:
+    """Robuster ENTSO-E-Abruf für den Zieltag (00:00–23:00 UTC).
+
+    Härtung gegenüber dem ENTSO-E-Transparency-Verhalten (siehe
+    Recherche): transiente API-/Netzfehler und „HTTP 200 + No matching
+    data" treten real auf, ebenso einzelne fehlende Stunden (DST,
+    verspätete TSO-Veröffentlichung). Strategie:
+
+      * transienter Fehler  → Retry mit exponentiellem Backoff
+      * unvollständiger Tag  → kurzer Retry, dann `GroundTruthNotReady`
+        (CR-3: lieber aufschieben als raten — der nächste Lauf holt den
+        Tag via Catch-up nach)
+      * fehlender API-Key    → sofortiger harter Abbruch (laut scheitern)
+
+    `attempts`/`base_delay`/`sleep` sind injizierbar (Tests setzen
+    `sleep` auf No-op).
+    """
+    if not os.environ.get("ENTSOE_API_KEY"):
+        raise RuntimeError("ENTSOE_API_KEY ist nicht gesetzt")
+
+    last_reason = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            y = _download_actual_load(target_date)
+        except GroundTruthNotReady as exc:
+            last_reason = str(exc)
+        except Exception as exc:  # transient: Netz/API/Rate-Limit
+            last_reason = f"transienter Abruf-Fehler: {exc}"
+        else:
+            missing = int(y.isna().sum())
+            if missing == 0:
+                return y
+            last_reason = (
+                f"ENTSO-E final-load unvollständig: {missing} fehlende Stunden"
+            )
+
+        if attempt < attempts:
+            delay = base_delay * 2 ** (attempt - 1)
+            print(f"[score_day] {target_date}: Versuch {attempt}/{attempts} "
+                  f"nicht erfolgreich ({last_reason}); neuer Versuch in "
+                  f"{delay:.0f}s")
+            sleep(delay)
+
+    raise GroundTruthNotReady(
+        f"ENTSO-E-Actuals für {target_date} nach {attempts} Versuchen nicht "
+        f"verfügbar: {last_reason}"
+    )
 
 
 def score_submission(forecast_values: np.ndarray, actual: pd.Series) -> dict:
@@ -279,10 +344,15 @@ def main() -> int:
         print(f"[score_day] Aufgeschoben (Actuals noch nicht verfügbar): "
               f"{', '.join(deferred)}")
 
-    # Nur scheitern, wenn der primäre Zieltag aufgeschoben wurde *und* gar
-    # nichts gescort werden konnte — dann stimmt etwas nicht (z. B. API-Key
-    # fehlt). Ein aufgeschobener Nebentag bei Fortschritt ist kein Fehler.
-    if args.date in deferred and not all_rows:
+    # Beobachtbarkeit: Wenn der *primäre* Zieltag nicht gescort werden konnte,
+    # scheitert der Lauf sichtbar (roter Run als Alarm) — selbst wenn ältere
+    # Catch-up-Tage Fortschritt gemacht haben. Diese werden vom nächsten Lauf
+    # ohnehin nachgeholt. Ein aufgeschobener *Nebentag* bei gescortem
+    # Primärtag ist hingegen kein Fehler (nur Warnung oben).
+    if args.date in deferred:
+        print(f"::error::Primärer Zieltag {args.date} konnte nicht gescort "
+              f"werden (ENTSO-E-Actuals nicht verfügbar). Nächster Lauf holt "
+              f"ihn via Catch-up nach.")
         return 1
     return 0
 

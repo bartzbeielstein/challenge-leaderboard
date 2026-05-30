@@ -20,11 +20,22 @@ def _load(name: str) -> dict:
     return yaml.safe_load((WF / name).read_text())
 
 
-def test_score_daily_has_07_utc_cron():
+def test_score_daily_has_09_utc_cron():
+    # 09:00 UTC gives margin over ENTSO-E's H+1 publication floor for the
+    # last UTC hour; see the comment in score-daily.yml and README.
     wf = _load("score-daily.yml")
     on = wf[True] if True in wf else wf["on"]  # PyYAML quirk: `on` -> True
     crons = [s["cron"] for s in on["schedule"]]
-    assert "0 7 * * *" in crons
+    assert "0 9 * * *" in crons
+    assert "0 7 * * *" not in crons, "07:00 UTC cron must be retired (too early)"
+
+
+def test_score_daily_has_concurrency_guard():
+    # Overlapping cron + manual runs must not race on data/scores.parquet.
+    wf = _load("score-daily.yml")
+    conc = wf["concurrency"]
+    assert conc["group"]
+    assert conc["cancel-in-progress"] is False
 
 
 def test_score_daily_workflow_dispatch_accepts_target_date():
@@ -70,4 +81,23 @@ def test_build_and_deploy_has_pages_permissions():
 def test_validate_pr_triggers_on_pull_request():
     wf = _load("validate-pr.yml")
     on = wf[True] if True in wf else wf["on"]
+    assert "pull_request" in on
+
+
+def test_validate_pr_is_not_pull_request_target():
+    # Security invariant: untrusted fork code is validated under `pull_request`
+    # (no repo secrets exposed). `pull_request_target` would run that code with
+    # secrets + a write token in the base-repo context — a known exfil vector.
+    wf = _load("validate-pr.yml")
+    on = wf[True] if True in wf else wf["on"]
+    assert "pull_request_target" not in on
+
+
+def test_ci_workflow_runs_pytest_and_actionlint():
+    # The test suite + workflow lint must actually run in CI on every PR.
+    body = (WF / "ci.yml").read_text()
+    assert "pytest" in body
+    assert "actionlint" in body
+    ci = _load("ci.yml")
+    on = ci[True] if True in ci else ci["on"]
     assert "pull_request" in on

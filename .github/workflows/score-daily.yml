@@ -2,7 +2,12 @@ name: Daily Scoring
 
 on:
   schedule:
-    - cron: "0 7 * * *"     # täglich 07:00 UTC (ENTSO-E final-load i. d. R. verfügbar)
+    # Täglich 09:00 UTC. ENTSO-E veröffentlicht Actual Total Load (6.1.A)
+    # regulatorisch bis H+1, real treten aber TSO-Verzögerungen, fehlende
+    # Stunden und „HTTP 200 + No matching data" auf. 09:00 UTC gibt ~8 h
+    # Sicherheitsmarge nach der H+1-Frist der letzten UTC-Stunde (01:00 UTC),
+    # ergänzt durch Retry/Backoff + Catch-up in score_day.py.
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       target_date:
@@ -19,6 +24,14 @@ on:
 permissions:
   contents: write
   pull-requests: write
+
+# Serialisiert Score-Läufe: ein verzögerter Cron- und ein manueller
+# workflow_dispatch-Lauf dürfen nicht parallel auf data/scores.parquet
+# schreiben (Race/Datenverlust beim append). cancel-in-progress: false,
+# damit ein laufender Score nicht abgebrochen wird — der zweite wartet.
+concurrency:
+  group: score-daily
+  cancel-in-progress: false
 
 jobs:
   score:
