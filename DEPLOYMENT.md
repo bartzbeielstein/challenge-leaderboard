@@ -119,6 +119,76 @@ KI-VO, CR-4).
 
 ---
 
+## 4a. Auto-Merge-Bot (GitHub App) einrichten
+
+Das automatische Mergen (Team-Submission-PRs **und** die täglichen
+Score-PRs) läuft über eine **GitHub App** mit kurzlebigen, pro Lauf neu
+erzeugten Installations-Tokens. Das ersetzt den früheren PAT
+`SCORE_BOT_TOKEN`, dessen Ablauf die häufigste stille Fehlerquelle war
+(abgelaufener Token → PRs blieben unbemerkt offen). Vorteile: Least
+Privilege (nur dieses Repo), kein jährlicher Token-Rotations-Zwang, klare
+Bot-Identität.
+
+> **Wichtig:** Erst nach diesem Schritt (App erstellt, installiert,
+> Secrets gesetzt) dürfen `score-daily.yml` / `auto-merge.yml` mit
+> App-Token gemergt/aktiviert werden. Ohne die Secrets schlägt der
+> `create-github-app-token`-Schritt **laut** fehl.
+
+**1. App erstellen**
+
+<https://github.com/settings/apps/new> (oder für eine Org:
+`https://github.com/organizations/<org>/settings/apps/new`)
+
+- *GitHub App name*: z. B. `challenge-leaderboard-bot`
+- *Homepage URL*: die Repo-URL genügt
+- *Webhook*: **deaktivieren** (Haken bei „Active" entfernen)
+- *Repository permissions*:
+  - **Contents: Read and write**
+  - **Pull requests: Read and write**
+- *Where can this GitHub App be installed?*: *Only on this account*
+- **Create GitHub App**
+
+**2. Private Key erzeugen & App installieren**
+
+- Auf der App-Seite unten *Generate a private key* → lädt eine `.pem`-Datei.
+- *Install App* (linke Seitenleiste) → auf dem Account installieren und
+  auf **Only select repositories → challenge-leaderboard** beschränken.
+- Die **App ID** steht oben auf der App-Seite (*About* → „App ID").
+
+**3. Secrets setzen**
+
+```sh
+gh secret set APP_ID \
+    --repo <owner>/challenge-leaderboard \
+    --body "<app-id-zahl>"
+
+gh secret set APP_PRIVATE_KEY \
+    --repo <owner>/challenge-leaderboard \
+    --body "$(cat /pfad/zu/challenge-leaderboard-bot.*.pem)"
+```
+
+Verifizieren:
+
+```sh
+gh secret list --repo <owner>/challenge-leaderboard
+# erwartet: APP_ID, APP_PRIVATE_KEY, ENTSOE_API_KEY
+```
+
+Den alten PAT anschließend entfernen (falls vorhanden):
+
+```sh
+gh secret delete SCORE_BOT_TOKEN --repo <owner>/challenge-leaderboard
+```
+
+> **Sicherheitsmodell (Fork-PRs):** `validate-pr.yml` läuft unter
+> `pull_request` und führt damit ungeprüften Fork-Code aus — ihm werden
+> **bewusst keine Secrets** gegeben (GitHub blendet sie für Fork-PRs aus).
+> Das Mergen übernimmt `auto-merge.yml` per `workflow_run` im
+> vertrauenswürdigen Basis-Repo-Kontext, **ohne** den PR-Code auszuführen,
+> und nur für grün validierte PRs mit genau einer `submissions/**`-Datei.
+
+---
+
 ## 5. GitHub Pages aktivieren
 
 **Web-UI (es gibt keinen offiziellen gh-Befehl dafür):**
@@ -267,6 +337,8 @@ ausrollen.
 - [ ] `uv.lock` committet
 - [ ] Repo öffentlich auf GitHub
 - [ ] Secret `ENTSOE_API_KEY` gesetzt
+- [ ] Auto-Merge-Bot (GitHub App) erstellt + installiert; Secrets
+      `APP_ID` und `APP_PRIVATE_KEY` gesetzt; alter `SCORE_BOT_TOKEN` entfernt
 - [ ] GitHub Pages aktiviert (Source = Actions)
 - [ ] Pages-URL erreichbar, zeigt "Noch keine bewerteten Submissions"
 - [ ] Branch protection auf `main` + Auto-Merge erlaubt

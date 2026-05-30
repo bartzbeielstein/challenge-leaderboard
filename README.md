@@ -48,10 +48,21 @@ challenge-leaderboard/
 ├── templates/leaderboard.html.j2
 └── .github/workflows/
     ├── ci.yml                          # pytest + actionlint auf jedem PR
-    ├── validate-pr.yml
+    ├── validate-pr.yml                 # Schema/Deadline/Auth (Fork: ohne Secrets)
+    ├── auto-merge.yml                  # mergt grüne Submission-PRs via GitHub App
     ├── score-daily.yml
     └── build-and-deploy.yml
 ```
+
+### Sicherheitsmodell der PR-Pipeline
+
+`validate-pr.yml` läuft unter `pull_request` und führt damit (bei
+Fork-PRs) ungeprüften Team-Code aus — deshalb bekommt es **bewusst keine
+Secrets** und kein Schreib-Token. Das Mergen erledigt das separate
+`auto-merge.yml` per `workflow_run` im vertrauenswürdigen Basis-Repo-Kontext
+(ohne PR-Code auszuführen) mit einem kurzlebigen **GitHub-App-Token**, und
+nur für grün validierte PRs mit genau einer `submissions/**`-Datei. Setup:
+siehe `DEPLOYMENT.md` Abschnitt 4a.
 
 ## Tageslauf-Timing & Robustheit
 

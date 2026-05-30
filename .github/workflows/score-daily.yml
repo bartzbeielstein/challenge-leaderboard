@@ -42,6 +42,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: GitHub-App-Token erzeugen
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -72,7 +79,7 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.SCORE_BOT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           add-paths: data/scores.parquet
           branch: bot/scores-${{ steps.target.outputs.date }}
           delete-branch: true
@@ -90,7 +97,7 @@ jobs:
         continue-on-error: true
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
-          token: ${{ secrets.SCORE_BOT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
           merge-method: squash
 

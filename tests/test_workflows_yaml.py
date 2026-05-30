@@ -101,3 +101,47 @@ def test_ci_workflow_runs_pytest_and_actionlint():
     ci = _load("ci.yml")
     on = ci[True] if True in ci else ci["on"]
     assert "pull_request" in on
+
+
+# --------------------------------------------------------------------------
+# GitHub App auto-merge migration: SCORE_BOT_TOKEN (a human PAT) is retired
+# in favour of a scoped App with short-lived per-run installation tokens.
+# --------------------------------------------------------------------------
+
+def test_no_workflow_uses_score_bot_token():
+    # The PAT is fully retired — its expiry was the #1 silent-failure mode.
+    for wf in WF.glob("*.yml"):
+        assert "SCORE_BOT_TOKEN" not in wf.read_text(), (
+            f"{wf.name} still references the retired SCORE_BOT_TOKEN PAT."
+        )
+
+
+def test_score_daily_uses_github_app_token():
+    body = (WF / "score-daily.yml").read_text()
+    assert "actions/create-github-app-token" in body
+    # The bot PRs are created + auto-merged with the minted App token.
+    assert "steps.app-token.outputs.token" in body
+
+
+def test_validate_pr_has_no_auto_merge_and_no_secrets():
+    # Auto-merge moved to auto-merge.yml; the untrusted pull_request workflow
+    # must not enable merges or reference any secret.
+    body = (WF / "validate-pr.yml").read_text()
+    assert "enable-pull-request-automerge" not in body
+    assert "secrets." not in body
+
+
+def test_auto_merge_workflow_is_secure_workflow_run():
+    body = (WF / "auto-merge.yml").read_text()
+    am = _load("auto-merge.yml")
+    on = am[True] if True in am else am["on"]
+    # Triggered by the validation workflow completing (trusted base context),
+    # not by pull_request (which would run untrusted fork code with secrets).
+    assert "workflow_run" in on
+    assert "Validate Submission PR" in on["workflow_run"]["workflows"]
+    assert "pull_request" not in on
+    # Mints an App token and only merges green PR validations.
+    assert "actions/create-github-app-token" in body
+    assert "conclusion == 'success'" in body or "conclusion=='success'" in body
+    # Hardening: only single-file submission PRs are auto-merged.
+    assert "submissions/" in body
