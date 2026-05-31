@@ -47,10 +47,37 @@ challenge-leaderboard/
 │   └── build_leaderboard.py          # Aggregat + HTML
 ├── templates/leaderboard.html.j2
 └── .github/workflows/
-    ├── validate-pr.yml
+    ├── ci.yml                          # pytest + actionlint auf jedem PR
+    ├── validate-pr.yml                 # Schema/Deadline/Auth (Fork: ohne Secrets)
+    ├── auto-merge.yml                  # mergt grüne Submission-PRs via GitHub App
     ├── score-daily.yml
     └── build-and-deploy.yml
 ```
+
+### Sicherheitsmodell der PR-Pipeline
+
+`validate-pr.yml` läuft unter `pull_request` und führt damit (bei
+Fork-PRs) ungeprüften Team-Code aus — deshalb bekommt es **bewusst keine
+Secrets** und kein Schreib-Token. Das Mergen erledigt das separate
+`auto-merge.yml` per `workflow_run` im vertrauenswürdigen Basis-Repo-Kontext
+(ohne PR-Code auszuführen) mit einem kurzlebigen **GitHub-App-Token**, und
+nur für grün validierte PRs mit genau einer `submissions/**`-Datei. Setup:
+siehe `DEPLOYMENT.md` Abschnitt 4a.
+
+## Tageslauf-Timing & Robustheit
+
+Der Score-Cron läuft **täglich 09:00 UTC** und bewertet „gestern" (UTC).
+ENTSO-E veröffentlicht *Actual Total Load* (6.1.A) regulatorisch bis H+1,
+real treten jedoch TSO-Verzögerungen, einzelne fehlende Stunden (DST) und
+„HTTP 200 + No matching data" auf. 09:00 UTC gibt Sicherheitsmarge nach der
+H+1-Frist der letzten UTC-Stunde (01:00 UTC). Ergänzend härtet
+`score_day.py` den Abruf:
+
+- **Retry/Backoff** bei transienten API-/Netzfehlern.
+- **Sauberes Aufschieben** (`GroundTruthNotReady`) bei unvollständigem Tag —
+  lieber morgen via **Catch-up** nachholen als raten (CR-3).
+- **Lauter Fehlschlag**: kann der *primäre* Zieltag nicht gescort werden,
+  endet der Lauf rot (Alarm); Nebentage werden still nachgeholt.
 
 ## `teams.yml`-Schema
 
