@@ -22,7 +22,7 @@ teams:
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
     github_handles: [bartzbeielstein]
-  - id: entso-e
+  - id: entsoe
     display_name: "Entso-E"
     github_handles: [bartzbeielstein]
   - id: neura
