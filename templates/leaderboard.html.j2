@@ -2,98 +2,185 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lastprognose-Challenge SoSe26 — Leaderboard</title>
+  {% if plotlyjs %}<script>{{ plotlyjs | safe }}</script>{% endif %}
   <style>
-    body { font-family: "Helvetica Neue", Arial, sans-serif; max-width: 880px;
-           margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-    h1 { margin-bottom: 0.2rem; }
-    .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --ink: #1a1f29;
+      --muted: #6b7280;
+      --line: #e7eaef;
+      --accent: #4f46e5;
+      --accent-soft: #eef2ff;
+      --gold: #f6c453;
+      --shadow: 0 1px 3px rgba(16, 24, 40, .06), 0 1px 2px rgba(16, 24, 40, .04);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+                   sans-serif;
+      max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+      color: var(--ink); background: var(--bg); line-height: 1.5;
+    }
+    a { color: var(--accent); }
+    .hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #fff; border-radius: 16px; padding: 1.75rem 2rem;
+      box-shadow: var(--shadow); margin-bottom: 1.5rem;
+    }
+    .hero h1 { margin: 0 0 .35rem; font-size: 1.8rem; letter-spacing: -.01em; }
+    .hero p { margin: 0; color: rgba(255, 255, 255, .88); max-width: 70ch; }
+    .hero .stats { margin-top: 1.1rem; display: flex; gap: 2rem; flex-wrap: wrap; }
+    .hero .stat b { display: block; font-size: 1.5rem; line-height: 1.1; }
+    .hero .stat span { font-size: .8rem; color: rgba(255, 255, 255, .8);
+                       text-transform: uppercase; letter-spacing: .04em; }
+    .meta { color: var(--muted); font-size: .9rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+    }
+    .card > h2 { margin: 0 0 .9rem; font-size: 1.2rem; }
+    .card > .meta { margin: -.4rem 0 1rem; }
+    .js-plotly-plot { width: 100% !important; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { padding: 0.5rem 0.8rem; text-align: left;
-             border-bottom: 1px solid #e5e5e5; }
-    th { background: #f5f5f5; }
+    th, td { padding: .55rem .8rem; text-align: left;
+             border-bottom: 1px solid var(--line); }
+    th { background: #fafbfc; font-size: .82rem; text-transform: uppercase;
+         letter-spacing: .03em; color: var(--muted); }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    tr:first-child td { font-weight: 600; }
-    .empty { color: #888; font-style: italic; padding: 2rem 0; }
-    h2 { margin-top: 2.5rem; }
-    td.locf { color: #888; }
-    td.miss { color: #ccc; text-align: right; }
+    tbody tr:nth-child(even) td { background: #fcfcfd; }
+    tbody tr:first-child td { font-weight: 600; }
+    tbody tr:first-child td:first-child::before { content: "🏆 "; }
+    td.locf { color: #9aa1ab; }
+    td.miss { color: #d0d4da; text-align: right; }
+    .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
+    .rank-badge { display: inline-block; min-width: 1.5rem; text-align: center;
+                  font-weight: 600; }
+    footer { color: var(--muted); font-size: .88rem; margin-top: 2rem;
+             text-align: center; }
   </style>
 </head>
 <body>
-  <h1>Lastprognose-Challenge SoSe26</h1>
-  <p class="meta">
-    Bewertung der DE-day-ahead-Lastprognose (mittlere MAE über alle
-    bewerteten Tage, aufsteigend; fehlende Submissions werden per LOCF
-    aus der jeweils letzten Prognose fortgeschrieben).
-    Stand: {{ generated_at }} UTC.
-  </p>
+  <header class="hero">
+    <h1>Lastprognose-Challenge SoSe26</h1>
+    <p>
+      DE-Day-Ahead-Lastprognose im Wettbewerb: bewertet über die mittlere
+      MAE aller Zieltage (aufsteigend; fehlende Submissions werden per LOCF
+      aus der jeweils letzten Prognose fortgeschrieben).
+    </p>
+    {% if rows %}
+    <div class="stats">
+      <div class="stat"><b>{{ rows|length }}</b><span>Teams</span></div>
+      <div class="stat"><b>{{ daily.dates|length if daily and daily.dates else 0 }}</b><span>Bewertete Tage</span></div>
+      <div class="stat"><b>{{ "%.0f"|format(rows[0].mean_mae) }}</b><span>Beste Ø MAE [MW]</span></div>
+    </div>
+    {% endif %}
+  </header>
 
-  {% if rows %}
-  <table>
-    <thead>
-      <tr>
-        <th>#</th><th>Team</th>
-        <th class="num">Mean MAE [MW]</th>
-        <th class="num">Sum MAE [MW]</th>
-        <th class="num">Bewertete Tage</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for row in rows %}
-      <tr>
-        <td>{{ row.rank }}</td>
-        <td>{{ row.display_name }}</td>
-        <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
-        <td class="num">{{ "%.2f"|format(row.sum_mae) }}</td>
-        <td class="num">{{ row.n_submissions }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="empty">Noch keine bewerteten Submissions.</p>
+  <p class="meta">Stand: {{ generated_at }} UTC.</p>
+
+  {% if figs and figs.forecast %}
+  <section class="card">
+    <h2>Prognose vs. Ist-Last</h2>
+    <p class="meta">
+      Stündliche 24-h-Prognose jedes Teams gegen die tatsächlich gemessene
+      Netzlast (ENTSO-E Actual Total Load, DE). Zieltag oben rechts wählbar.
+    </p>
+    {{ figs.forecast | safe }}
+  </section>
   {% endif %}
+
+  {% if figs and figs.leaderboard %}
+  <section class="card">
+    <h2>Mittlere MAE je Team</h2>
+    {{ figs.leaderboard | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.mae_time %}
+  <section class="card">
+    <h2>MAE-Verlauf</h2>
+    <p class="meta">
+      Tages-MAE je Team über die Zeit. Offene Marker kennzeichnen via LOCF
+      fortgeschriebene Tage (keine frische Submission).
+    </p>
+    {{ figs.mae_time | safe }}
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Leaderboard</h2>
+    {% if rows %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Team</th>
+          <th class="num">Mean MAE [MW]</th>
+          <th class="num">Sum MAE [MW]</th>
+          <th class="num">Bewertete Tage</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><span class="rank-badge">{{ row.rank }}</span></td>
+          <td>{{ row.display_name }}</td>
+          <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
+          <td class="num">{{ "%.2f"|format(row.sum_mae) }}</td>
+          <td class="num">{{ row.n_submissions }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">Noch keine bewerteten Submissions.</p>
+    {% endif %}
+  </section>
 
   {% if daily and daily.dates %}
-  <h2>Tagesfehler je Team</h2>
-  <p class="meta">
-    MAE [MW] pro Zieltag. Werte in <span class="locf">grau</span> kennzeichnen
-    eine via LOCF fortgeschriebene Prognose (keine frische Submission für
-    diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
-    Forecast vorlag.
-  </p>
-  <table>
-    <thead>
-      <tr>
-        <th>Team</th>
-        {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-    {% for team in daily.teams %}
-      <tr>
-        <td>{{ team.display_name }}</td>
-        {% for c in team.cells %}
-          {% if c.mae is none %}
-            <td class="miss">—</td>
-          {% elif c.carried %}
-            <td class="num locf" title="LOCF — fortgeschrieben">{{ "%.2f"|format(c.mae) }}</td>
-          {% else %}
-            <td class="num">{{ "%.2f"|format(c.mae) }}</td>
-          {% endif %}
-        {% endfor %}
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <section class="card">
+    <h2>Tagesfehler je Team</h2>
+    <p class="meta">
+      MAE [MW] pro Zieltag. Werte in <span class="locf">grau</span> kennzeichnen
+      eine via LOCF fortgeschriebene Prognose (keine frische Submission für
+      diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
+      Forecast vorlag.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Team</th>
+          {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for team in daily.teams %}
+        <tr>
+          <td>{{ team.display_name }}</td>
+          {% for c in team.cells %}
+            {% if c.mae is none %}
+              <td class="miss">—</td>
+            {% elif c.carried %}
+              <td class="num locf" title="LOCF — fortgeschrieben">{{ "%.2f"|format(c.mae) }}</td>
+            {% else %}
+              <td class="num">{{ "%.2f"|format(c.mae) }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
   {% endif %}
 
-  <p class="meta">
+  <footer>
     Daten: <a href="data/scores.json">scores.json</a>,
     <a href="data/daily.json">daily.json</a> (Tagesfehler pro Team).
     Spielregeln: Kapitel 12 des Skripts. Bewertungs-Pipeline:
-    <a href="https://github.com/">challenge-leaderboard</a>.
-  </p>
+    <a href="https://github.com/bartzbeielstein/challenge-leaderboard">challenge-leaderboard</a>.
+  </footer>
 </body>
 </html>

@@ -72,6 +72,16 @@ def test_build_and_deploy_push_paths_include_scores_parquet():
     assert "data/scores.parquet" in paths
 
 
+def test_build_and_deploy_push_paths_include_actuals_and_charts():
+    # A merged actuals/chart/dep update must trigger a Pages rebuild, else the
+    # forecast-vs-actual chart never refreshes on the published site.
+    bd = _load("build-and-deploy.yml")
+    bd_on = bd[True] if True in bd else bd["on"]
+    paths = bd_on["push"]["paths"]
+    for p in ("data/actual_load.parquet", "scripts/charts.py", "uv.lock"):
+        assert p in paths, f"{p} missing from build-and-deploy.yml push paths"
+
+
 def test_build_and_deploy_has_pages_permissions():
     bd = _load("build-and-deploy.yml")
     assert bd["permissions"]["pages"] == "write"

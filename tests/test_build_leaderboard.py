@@ -115,3 +115,64 @@ def test_main_handles_empty_scores(tmp_path):
     assert (tmp_path / "public" / "index.html").exists()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert data == []
+
+
+# --------------------------------------------------------------------------
+# Charts: embedded, with graceful degradation for the actuals-dependent one.
+# --------------------------------------------------------------------------
+
+def _write_actuals(tmp_path, date: str):
+    ts = pd.date_range(f"{date}T00:00:00Z", periods=24, freq="h", tz="UTC")
+    pd.DataFrame({
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "load_mw": [1000.0 + i for i in range(24)],
+    }).to_parquet(tmp_path / "data" / "actual_load.parquet", index=False)
+
+
+def _write_submission(tmp_path, team: str, date: str):
+    d = tmp_path / "submissions" / team
+    d.mkdir(parents=True, exist_ok=True)
+    ts = pd.date_range(f"{date}T00:00:00Z", periods=24, freq="h", tz="UTC")
+    pd.DataFrame({
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "forecast_mw": [1010.0 + i for i in range(24)],
+    }).to_csv(d / f"{date}.csv", index=False)
+
+
+def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2, "carried_forward": False},
+    ])
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert 'id="fig-leaderboard"' in html
+    assert 'id="fig-mae-time"' in html
+    assert 'id="fig-forecast"' not in html       # no actuals -> self-disabled
+    assert "Prognose vs. Ist-Last" not in html
+    # The Plotly library bundle is embedded exactly once.
+    assert html.count("plotly.js v") == 1
+
+
+def test_main_renders_forecast_chart_when_actuals_present(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")
+    _write_submission(tmp_path, "team_4", "2026-05-26")
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert 'id="fig-forecast"' in html
+    assert "Prognose vs. Ist-Last" in html
+
+
+def test_main_empty_scores_does_not_embed_plotly_bundle(tmp_path):
+    _seed_teams(tmp_path)
+    bl.main()  # no scores -> no charts -> no 4.8 MB bundle
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "plotly.js v" not in html

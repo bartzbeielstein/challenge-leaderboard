@@ -18,6 +18,9 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from plotly.offline import get_plotlyjs
+
+import charts
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -91,7 +94,37 @@ def daily_breakdown(
     return {"dates": dates, "teams": teams}
 
 
-def render(board: pd.DataFrame, daily: dict) -> None:
+def build_figures(
+    board: pd.DataFrame, daily: dict, scores: pd.DataFrame,
+    names: dict[str, str],
+) -> dict[str, str]:
+    """Baut die eingebetteten Plotly-Fragmente.
+
+    Pfade werden hier aus ``REPO_ROOT`` abgeleitet (nicht modulglobal),
+    damit die Tests via ``monkeypatch.setattr(bl, "REPO_ROOT", tmp_path)``
+    auch Submissions/Actuals isolieren. Fehlt ``data/actual_load.parquet``,
+    liefert ``fig_forecast_vs_actual`` None und das Fragment ist '' — die
+    Headline-Figur blendet sich sauber aus (Graceful Degradation).
+    """
+    actuals_path = REPO_ROOT / "data" / "actual_load.parquet"
+    submissions_dir = REPO_ROOT / "submissions"
+    actuals = charts.load_actuals(actuals_path)
+    subs = charts.load_submissions(submissions_dir, list(names))
+    return {
+        "forecast": charts.fig_to_html(
+            charts.fig_forecast_vs_actual(
+                actuals, subs, scores, names, div_id="fig-forecast"),
+            "fig-forecast"),
+        "leaderboard": charts.fig_to_html(
+            charts.fig_mean_mae_bar(board, div_id="fig-leaderboard"),
+            "fig-leaderboard"),
+        "mae_time": charts.fig_to_html(
+            charts.fig_mae_over_time(scores, names, div_id="fig-mae-time"),
+            "fig-mae-time"),
+    }
+
+
+def render(board: pd.DataFrame, daily: dict, figs: dict[str, str]) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
 
@@ -100,9 +133,14 @@ def render(board: pd.DataFrame, daily: dict) -> None:
         autoescape=select_autoescape(),
     )
     template = env.get_template("leaderboard.html.j2")
+    # Die ~4.8 MB Plotly-Bibliothek nur einbetten, wenn überhaupt eine Figur
+    # gerendert wird (leeres Leaderboard → keine Charts → kein Bundle).
+    plotlyjs = get_plotlyjs() if any(figs.values()) else ""
     html = template.render(
         rows=board.to_dict(orient="records"),
         daily=daily,
+        figs=figs,
+        plotlyjs=plotlyjs,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
@@ -124,7 +162,8 @@ def main() -> None:
         ])
     board = aggregate(scores, names)
     daily = daily_breakdown(scores, names, list(board["team_id"]))
-    render(board, daily)
+    figs = build_figures(board, daily, scores, names)
+    render(board, daily, figs)
     print(f"[build] Leaderboard mit {len(board)} Teams "
           f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 
