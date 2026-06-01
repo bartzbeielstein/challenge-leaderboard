@@ -73,14 +73,15 @@ def test_validate_schema_nan_mw(tmp_path):
 
 
 def test_validate_deadline_passes_before_cutoff():
-    # 2026-05-28T00:00 Europe/Berlin -> 2026-05-27T22:00 UTC (CEST is +02:00)
-    # Deadline = D-1 23:59 Berlin = 2026-05-27T21:59 UTC
-    now = datetime(2026, 5, 27, 21, 0, tzinfo=timezone.utc)  # one hour before
+    # UTC-only: deadline for target D = D-1 23:59 UTC. For D=2026-05-28
+    # that is 2026-05-27 23:59 UTC.
+    now = datetime(2026, 5, 27, 21, 0, tzinfo=timezone.utc)  # well before
     vs.validate_deadline("2026-05-28", now_utc=now)
 
 
 def test_validate_deadline_blocks_after_cutoff():
-    now = datetime(2026, 5, 27, 22, 0, tzinfo=timezone.utc)  # one minute past
+    # 2026-05-27 23:59 UTC is the deadline; at it (>=) we must reject.
+    now = datetime(2026, 5, 27, 23, 59, tzinfo=timezone.utc)
     with pytest.raises(SystemExit) as ei:
         vs.validate_deadline("2026-05-28", now_utc=now)
     assert ei.value.code == 2

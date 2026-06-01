@@ -35,6 +35,7 @@ def _seed_teams(tmp_path: Path):
             {"id": "team_4", "display_name": "Team 4", "github_handles": []},
             {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": []},
             {"id": "neura", "display_name": "Team Neura", "github_handles": []},
+            {"id": "entsoe", "display_name": "Entso-E", "github_handles": []},
         ]
     }))
 
@@ -115,3 +116,152 @@ def test_main_handles_empty_scores(tmp_path):
     assert (tmp_path / "public" / "index.html").exists()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert data == []
+
+
+# --------------------------------------------------------------------------
+# Charts: embedded, with graceful degradation for the actuals-dependent one.
+# --------------------------------------------------------------------------
+
+def _write_actuals(tmp_path, date: str):
+    ts = pd.date_range(f"{date}T00:00:00Z", periods=24, freq="h", tz="UTC")
+    pd.DataFrame({
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "load_mw": [1000.0 + i for i in range(24)],
+        "entsoe_forecast_mw": [990.0 + i for i in range(24)],
+    }).to_parquet(tmp_path / "data" / "actual_load.parquet", index=False)
+
+
+def _write_submission(tmp_path, team: str, date: str):
+    d = tmp_path / "submissions" / team
+    d.mkdir(parents=True, exist_ok=True)
+    ts = pd.date_range(f"{date}T00:00:00Z", periods=24, freq="h", tz="UTC")
+    pd.DataFrame({
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "forecast_mw": [1010.0 + i for i in range(24)],
+    }).to_csv(d / f"{date}.csv", index=False)
+
+
+def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2, "carried_forward": False},
+    ])
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert 'id="fig-leaderboard"' in html
+    assert 'id="fig-mae-time"' in html
+    assert 'id="fig-forecast"' not in html       # no actuals -> self-disabled
+    assert "Prognose vs. Ist-Last" not in html
+    # The Plotly library bundle is embedded exactly once.
+    assert html.count("plotly.js v") == 1
+    # Layout: the Leaderboard table comes before the charts.
+    assert html.index("<h2>Leaderboard</h2>") < html.index("Mittlere MAE je Team")
+
+
+def test_main_renders_forecast_chart_when_actuals_present(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")
+    _write_submission(tmp_path, "team_4", "2026-05-26")
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert 'id="fig-forecast"' in html
+    assert "Prognose vs. Ist-Last" in html
+    # ENTSO-E day-ahead forecast plotted as a baseline trace.
+    assert "ENTSO-E Prognose" in html
+    # Layout: the Leaderboard table is above the forecast chart.
+    assert html.index("<h2>Leaderboard</h2>") < html.index("Prognose vs. Ist-Last")
+
+
+def test_main_empty_scores_does_not_embed_plotly_bundle(tmp_path):
+    _seed_teams(tmp_path)
+    bl.main()  # no scores -> no charts -> no 4.8 MB bundle
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "plotly.js v" not in html
+
+
+def test_load_logo_uri_missing_is_empty(tmp_path):
+    assert bl.load_logo_uri(tmp_path / "logo" / "spotlogo.png") == ""
+
+
+def test_main_embeds_logo_when_present(tmp_path):
+    _seed_teams(tmp_path)
+    (tmp_path / "logo").mkdir()
+    (tmp_path / "logo" / "spotlogo.png").write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "data:image/png;base64," in html
+    assert 'class="hero-logo"' in html
+
+
+def test_main_omits_logo_when_absent(tmp_path):
+    _seed_teams(tmp_path)
+    bl.main()  # no logo file under tmp_path -> hero renders without it
+    html = (tmp_path / "public" / "index.html").read_text()
+    # The CSS rule `.hero-logo {` is always present; the <img> tag is not.
+    assert 'class="hero-logo"' not in html
+    assert "data:image/png;base64," not in html
+
+
+# --------------------------------------------------------------------------
+# ENTSO-E day-ahead forecast as a ranked leaderboard baseline.
+# --------------------------------------------------------------------------
+
+def _actuals_frame(date: str = "2026-05-26", with_forecast: bool = True,
+                   hours: int = 24) -> pd.DataFrame:
+    ts = pd.date_range(f"{date}T00:00:00Z", periods=hours, freq="h", tz="UTC")
+    data = {
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "load_mw": [1000.0] * hours,
+    }
+    if with_forecast:
+        data["entsoe_forecast_mw"] = [1100.0] * hours   # constant error of 100
+    return pd.DataFrame(data)
+
+
+def test_entsoe_baseline_scores_computes_mae():
+    out = bl.entsoe_baseline_scores(_actuals_frame("2026-05-26"), pd.DataFrame())
+    assert list(out["team_id"]) == ["entsoe"]
+    assert out["target_date"].iloc[0] == "2026-05-26"
+    assert out["mae"].iloc[0] == 100.0          # |1100 - 1000|
+    assert not bool(out["carried_forward"].iloc[0])
+
+
+def test_entsoe_baseline_none_without_forecast_column():
+    df = _actuals_frame("2026-05-26", with_forecast=False)
+    assert bl.entsoe_baseline_scores(df, pd.DataFrame()).empty
+
+
+def test_entsoe_baseline_none_when_actuals_missing():
+    assert bl.entsoe_baseline_scores(None, pd.DataFrame()).empty
+
+
+def test_entsoe_baseline_requires_full_day():
+    df = _actuals_frame("2026-05-26", hours=10)   # partial day
+    assert bl.entsoe_baseline_scores(df, pd.DataFrame()).empty
+
+
+def test_entsoe_baseline_skips_already_scored_day():
+    # A real entsoe score in scores.parquet takes precedence over the baseline.
+    existing = pd.DataFrame([{"team_id": "entsoe", "target_date": "2026-05-26",
+                              "mae": 42.0}])
+    assert bl.entsoe_baseline_scores(_actuals_frame("2026-05-26"), existing).empty
+
+
+def test_main_ranks_entsoe_baseline_in_leaderboard(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")        # carries entsoe_forecast_mw
+    bl.main()
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    assert "entsoe" in [r["team_id"] for r in data]
+    assert "Entso-E" in [r["display_name"] for r in data]
