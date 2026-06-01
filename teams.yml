@@ -12,10 +12,10 @@ teams:
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
   - id: syntaxerror
     display_name: "Syntaxerror"
-    github_handles: [lriethk, timmyhaeger,linus-thk]
+    github_handles: [lriethk, timhaeger,linus-thk]
   - id: team_fabinalii
     display_name: "Team Fabinalii"
-    github_handles: [akiev, feith, zakharuk]
+    github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
   - id: team_4
     display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
@@ -40,3 +40,13 @@ teams:
   - id: team_gladiators
     display_name: "Team Gladiators"
     github_handles: [gauravlokhande1100-prog]
+  - id: team_immerzuspaet
+    display_name: "Team ImmerZuSpaet"
+    github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
+  - id: team_weather_report
+    display_name: "Team Weather Report"
+    github_handles: [LaloMohamad, yanickfotsing]
+  - id: Voltrion
+    display_name: "Voltrion"
+    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
+
