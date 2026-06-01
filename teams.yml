@@ -12,10 +12,10 @@ teams:
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
   - id: syntaxerror
     display_name: "Syntaxerror"
-    github_handles: [lriethk, timmyhaeger,linus-thk]
+    github_handles: [lriethk, timhaeger,linus-thk]
   - id: team_fabinalii
     display_name: "Team Fabinalii"
-    github_handles: [akiev, feith, zakharuk]
+    github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
   - id: team_4
     display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
