@@ -6,6 +6,8 @@ Automatisierte Bewertung der Live-Lastprognose-Challenge der Vorlesungen
 
 Webseite Leaderboard: https://bartzbeielstein.github.io/challenge-leaderboard/
 
+Webseite ENTSO-E: https://transparency.entsoe.eu
+
 Die Spielregeln stehen in Kapitel 12 des Skripts (`lecture/12_challenge.qmd`).
 Dieses Repo ist die
 *Bewertungs-Infrastruktur*: hier reichen Teams ihre täglichen
@@ -73,6 +75,54 @@ Nur Personen aus `github_handles` dürfen PRs für dieses Team mergen
 
 Details und die Formeln in `lecture/12_challenge.qmd` (§
 "Bewertungsmethodik im Detail").
+
+## Visualisierung des Leaderboards
+
+Zusätzlich zu den Tabellen rendert `scripts/build_leaderboard.py`
+interaktive Plotly-Diagramme auf der GitHub-Pages-Seite (Figuren in
+`scripts/charts.py`):
+
+- **Prognose vs. Ist-Last** — pro Zieltag (Dropdown oben rechts) die
+  24-h-Prognose jedes Teams gegen die gemessene DE-Netzlast (ENTSO-E
+  *Actual Total Load*), MAE je Team in der Legende.
+- **Mittlere MAE je Team** — horizontales Balkendiagramm (grün = gut → rot).
+- **MAE-Verlauf** — Tages-MAE je Team über die Zeit; offene Marker
+  kennzeichnen via LOCF fortgeschriebene Tage.
+
+Plotly.js ist einmalig in `index.html` eingebettet (self-contained,
+offline-fähig, via `uv.lock` gepinnt; deterministische `div_id`s → CR-2).
+Der Build läuft auf GitHub **ohne** API-Key und liest ausschließlich
+committete Dateien.
+
+### Ist-Last-Daten aktualisieren
+
+Das Prognose-vs-Ist-Last-Diagramm braucht die gemessene Netzlast als
+committete Zeitreihe (`data/actual_load.parquet`). Der `ENTSOE_API_KEY`
+liegt nur lokal vor, **nicht** auf dem GitHub-Runner — daher wird die
+Ist-Last lokal heruntergeladen und ins Repo gepusht:
+
+```bash
+uv run python scripts/fetch_actuals.py                  # alle relevanten Tage (Default)
+uv run python scripts/fetch_actuals.py --from 2026-05-26 --to 2026-06-01
+uv run python scripts/fetch_actuals.py --force          # bereits vollständige Tage neu laden
+```
+
+Anschließend `data/actual_load.parquet` per PR nach `main` bringen
+(Admin-Merge — der PR berührt keine `submissions/**`-Datei, wird also von
+`validate-pr.yml` pass-through abgenickt, aber bewusst **nicht**
+auto-gemerged).
+
+*Keep actuals fresh going forward:* run `uv run python
+scripts/fetch_actuals.py` locally whenever you want newer days, then
+commit `data/actual_load.parquet` via a PR (same flow). It skips
+already-fetched days and defers days ENTSO-E hasn't published yet.
+
+Das Skript nutzt dieselbe Download-Logik wie das Scoring
+(`score_day.fetch_ground_truth`): **Retry/Backoff** bei transienten
+Fehlern, **sauberes Aufschieben** noch unveröffentlichter Tage und
+**Überspringen** bereits vollständig geladener Tage. Fehlt die Datei,
+blendet der Build das Prognose-vs-Ist-Last-Diagramm sauber aus — die
+übrigen Charts und Tabellen bleiben erhalten.
 
 ## Reproduzierbarkeit (CR-2)
 
