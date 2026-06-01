@@ -69,8 +69,8 @@ class GroundTruthNotReady(RuntimeError):
     """
 
 
-def _download_actual_load(target_date: str) -> pd.Series:
-    """Ein ENTSO-E-Abrufversuch → stündliche Actual-Load-Serie.
+def _download_load_frame(target_date: str) -> pd.DataFrame:
+    """Ein ENTSO-E-Abrufversuch → stündlicher Frame auf die 24 Zielstunden.
 
     Verwendet das Muster aus Kapitel 02: `download_new_data` schreibt
     `interim/energy_load.csv` unter `$SPOTFORECAST2_DATA`, anschließend
@@ -78,9 +78,10 @@ def _download_actual_load(target_date: str) -> pd.Series:
     Cache-Verzeichnis, damit aufeinanderfolgende Score-Läufe sich nicht
     ins Gehege kommen (Kompatibilität mit GitHub-Actions-Runner).
 
-    Liefert die auf die 24 Zielstunden reindizierte Serie — die NaN
-    enthalten *kann*, wenn der Tag (noch) unvollständig veröffentlicht ist.
-    Die Vollständigkeitsprüfung übernimmt `fetch_ground_truth`.
+    `query_load_and_forecast` liefert *beide* Spalten — 'Actual Total Load'
+    und die 'Day-ahead ... Forecast'. Der Frame ist auf die 24 Zielstunden
+    reindiziert (auf Stunden resampled, falls 15-Min-Auflösung) und kann NaN
+    enthalten, wenn der Tag (noch) unvollständig veröffentlicht ist.
     """
     api_key = os.environ.get("ENTSOE_API_KEY")
     if not api_key:
@@ -119,17 +120,26 @@ def _download_actual_load(target_date: str) -> pd.Series:
         df = fetch_data(filename=str(interim))
 
     df.index = pd.to_datetime(df.index, utc=True)
+    if df.index.inferred_freq != "h":
+        df = df.resample("h").mean(numeric_only=True)
+    return df.reindex(target_hours)
+
+
+def _download_actual_load(target_date: str) -> pd.Series:
+    """Ein ENTSO-E-Abrufversuch → stündliche Actual-Load-Serie.
+
+    Dünne Schicht über `_download_load_frame`, die die Actual-Load-Spalte
+    auswählt. Die auf die 24 Zielstunden reindizierte Serie kann NaN
+    enthalten; die Vollständigkeitsprüfung übernimmt `fetch_ground_truth`.
+    """
+    df = _download_load_frame(target_date)
     load_col = next((c for c in df.columns if "Actual" in c and "Load" in c), None)
     if load_col is None:
         raise RuntimeError(
             f"Keine 'Actual Load'-Spalte gefunden. Vorhandene Spalten: "
             f"{list(df.columns)}"
         )
-    y = df[load_col].astype(float).rename("load")
-    if y.index.inferred_freq != "h":
-        y = y.resample("h").mean()
-
-    return y.reindex(target_hours)
+    return df[load_col].astype(float).rename("load")
 
 
 def fetch_ground_truth(

@@ -11,19 +11,25 @@ Ranking-Logik:
 """
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from plotly.offline import get_plotlyjs
+
+import charts
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCORES_PATH = REPO_ROOT / "data" / "scores.parquet"
 TEAMS_PATH = REPO_ROOT / "teams.yml"
 PUBLIC_DIR = REPO_ROOT / "public"
+ENTSOE_BASELINE_ID = "entsoe"
 TEMPLATE_DIR = REPO_ROOT / "templates"
 
 
@@ -91,7 +97,99 @@ def daily_breakdown(
     return {"dates": dates, "teams": teams}
 
 
-def render(board: pd.DataFrame, daily: dict) -> None:
+def entsoe_baseline_scores(
+    actuals: pd.DataFrame | None, existing: pd.DataFrame
+) -> pd.DataFrame:
+    """Tages-Scores der ENTSO-E-Day-ahead-Prognose als Leaderboard-Baseline.
+
+    Berechnet MAE/RMSE/MAPE der ``entsoe_forecast_mw``-Spalte aus
+    ``data/actual_load.parquet`` gegen den Ist-Load — zur Build-Zeit aus den
+    committeten Daten abgeleitet (kein API-Key), nicht in ``scores.parquet``
+    persistiert (bleibt mit den Actuals synchron). So erscheint die offizielle
+    ENTSO-E-Prognose als gerankte Referenz neben den Teams.
+
+    Nur vollständige Tage (24 Stunden) und nur Tage, die nicht bereits als
+    ``entsoe``-Zeile in ``existing`` gescort sind (echte Scores haben Vorrang).
+    """
+    if (actuals is None or actuals.empty
+            or "entsoe_forecast_mw" not in actuals.columns):
+        return pd.DataFrame()
+    df = actuals.dropna(subset=["load_mw", "entsoe_forecast_mw"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["target_date"] = df["timestamp_utc"].str.slice(0, 10)
+
+    already: set[str] = set()
+    if not existing.empty and "team_id" in existing.columns:
+        already = set(
+            existing.loc[existing["team_id"] == ENTSOE_BASELINE_ID,
+                         "target_date"].astype(str)
+        )
+
+    rows: list[dict] = []
+    for d, g in df.groupby("target_date"):
+        if d in already or len(g) < 24:
+            continue
+        actual = g["load_mw"].to_numpy(dtype=float)
+        err = g["entsoe_forecast_mw"].to_numpy(dtype=float) - actual
+        nz = actual != 0
+        rows.append({
+            "team_id": ENTSOE_BASELINE_ID,
+            "target_date": d,
+            "mae": round(float(np.mean(np.abs(err))), 4),
+            "rmse": round(float(np.sqrt(np.mean(err ** 2))), 4),
+            "mape": round(float(np.mean(np.abs(err[nz] / actual[nz])) * 100), 4)
+                    if nz.any() else float("nan"),
+            "carried_forward": False,
+            "source_date": d,
+        })
+    return pd.DataFrame(rows)
+
+
+def build_figures(
+    board: pd.DataFrame, daily: dict, scores: pd.DataFrame,
+    names: dict[str, str], actuals: pd.DataFrame | None,
+) -> dict[str, str]:
+    """Baut die eingebetteten Plotly-Fragmente.
+
+    ``actuals`` wird vom Aufrufer geladen (für die Baseline wiederverwendet).
+    Submissions-Pfad wird aus ``REPO_ROOT`` abgeleitet, damit die Tests via
+    ``monkeypatch.setattr(bl, "REPO_ROOT", tmp_path)`` isolieren. Liegt keine
+    Actuals-Datei vor, ist ``actuals`` None und ``fig_forecast_vs_actual``
+    liefert None — die Headline-Figur blendet sich sauber aus.
+    """
+    submissions_dir = REPO_ROOT / "submissions"
+    subs = charts.load_submissions(submissions_dir, list(names))
+    return {
+        "forecast": charts.fig_to_html(
+            charts.fig_forecast_vs_actual(
+                actuals, subs, scores, names, div_id="fig-forecast"),
+            "fig-forecast"),
+        "leaderboard": charts.fig_to_html(
+            charts.fig_mean_mae_bar(board, div_id="fig-leaderboard"),
+            "fig-leaderboard"),
+        "mae_time": charts.fig_to_html(
+            charts.fig_mae_over_time(scores, names, div_id="fig-mae-time"),
+            "fig-mae-time"),
+    }
+
+
+def load_logo_uri(path: Path) -> str:
+    """Logo als base64-Data-URI (self-contained, wie das Plotly-Bundle).
+
+    '' wenn die Datei fehlt — der Hero rendert dann ohne Logo (Graceful
+    Degradation). Vermeidet einen separaten Asset-Copy-Schritt nach
+    ``public/`` und funktioniert offline.
+    """
+    if not Path(path).exists():
+        return ""
+    data = base64.b64encode(Path(path).read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{data}"
+
+
+def render(
+    board: pd.DataFrame, daily: dict, figs: dict[str, str], logo_uri: str = "",
+) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
 
@@ -100,9 +198,15 @@ def render(board: pd.DataFrame, daily: dict) -> None:
         autoescape=select_autoescape(),
     )
     template = env.get_template("leaderboard.html.j2")
+    # Die ~4.8 MB Plotly-Bibliothek nur einbetten, wenn überhaupt eine Figur
+    # gerendert wird (leeres Leaderboard → keine Charts → kein Bundle).
+    plotlyjs = get_plotlyjs() if any(figs.values()) else ""
     html = template.render(
         rows=board.to_dict(orient="records"),
         daily=daily,
+        figs=figs,
+        plotlyjs=plotlyjs,
+        logo_uri=logo_uri,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
@@ -122,9 +226,16 @@ def main() -> None:
         scores = pd.DataFrame(columns=[
             "team_id", "target_date", "scored_at_utc", "mae", "rmse", "mape",
         ])
+    actuals = charts.load_actuals(REPO_ROOT / "data" / "actual_load.parquet")
+    # ENTSO-E-Day-ahead-Prognose als gerankte Baseline ins Leaderboard.
+    baseline = entsoe_baseline_scores(actuals, scores)
+    if not baseline.empty:
+        scores = pd.concat([scores, baseline], ignore_index=True)
     board = aggregate(scores, names)
     daily = daily_breakdown(scores, names, list(board["team_id"]))
-    render(board, daily)
+    figs = build_figures(board, daily, scores, names, actuals)
+    logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
+    render(board, daily, figs, logo_uri)
     print(f"[build] Leaderboard mit {len(board)} Teams "
           f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 
