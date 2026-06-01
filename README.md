@@ -1,28 +1,16 @@
 # challenge-leaderboard
 
-Automatisierte Bewertung der Live-Lastprognose-Challenge der Vorlesung
+Automatisierte Bewertung der Live-Lastprognose-Challenge der Vorlesungen
 *Sicherheitskritische Zeitreihenprognose mit spotforecast2-safe*
-(Numerische Mathematik, SS 2026, TH Köln, Bartz-Beielstein).
+(Numerische Mathematik / DDMO, SoSe 2026, TH Köln, Bartz-Beielstein).
 
-Die Spielregeln stehen in Kapitel 12 des Skripts (`lecture/12_challenge.qmd`,
-gerendert auf der Lehrstuhl-Webseite). Dieses Repo ist die
+Webseite Leaderboard: https://bartzbeielstein.github.io/challenge-leaderboard/
+
+Die Spielregeln stehen in Kapitel 12 des Skripts (`lecture/12_challenge.qmd`).
+Dieses Repo ist die
 *Bewertungs-Infrastruktur*: hier reichen Teams ihre täglichen
 Vorhersagen ein, hier läuft das Scoring, hier wird das Leaderboard
 gebaut und auf GitHub Pages publiziert.
-
-## Setup für Lehrende (einmalig)
-
-1. Repo öffentlich auf GitHub anlegen, z.B.
-   `https://github.com/<lehrstuhl>/challenge-leaderboard`.
-2. Diesen Verzeichnisbaum committen und pushen.
-3. Repo-Secret `ENTSOE_API_KEY` setzen
-   (Settings → Secrets and variables → Actions).
-4. GitHub Pages aktivieren: Source = "GitHub Actions".
-5. Branch protection auf `main`: PRs müssen `validate-pr.yml` grün haben
-   und dürfen via *Auto-merge* zusammengeführt werden.
-6. `teams.yml` mit den angemeldeten Teams pflegen (siehe Schema unten).
-7. Den Kickoff-Termin (`KICKOFF_DATE` in `scripts/score_day.py`) bei
-   Bedarf anpassen.
 
 ## Setup für Teams (einmalig)
 
@@ -32,27 +20,6 @@ gebaut und auf GitHub Pages publiziert.
 4. Für jede Submission: Feature-Branch → `submissions/<team_id>/<D>.csv`
    commiten → PR gegen `main` → automatischer Merge bei grünem Check.
 
-## Verzeichnisbaum
-
-```
-challenge-leaderboard/
-├── teams.yml                          # Team-Registry
-├── pyproject.toml                     # gepinnten Python-Stack für CI
-├── submissions/<team_id>/<D>.csv      # Einreichungen
-├── data/scores.parquet                # append-only Score-Historie
-├── public/                            # gh-pages-Quelle (build artefact)
-├── scripts/
-│   ├── validate_submission.py        # Schema + Deadline + Auth-Check
-│   ├── score_day.py                  # täglicher ENTSO-E-Pull + MAE
-│   └── build_leaderboard.py          # Aggregat + HTML
-├── templates/leaderboard.html.j2
-└── .github/workflows/
-    ├── ci.yml                          # pytest + actionlint auf jedem PR
-    ├── validate-pr.yml                 # Schema/Deadline/Auth (Fork: ohne Secrets)
-    ├── auto-merge.yml                  # mergt grüne Submission-PRs via GitHub App
-    ├── score-daily.yml
-    └── build-and-deploy.yml
-```
 
 ### Sicherheitsmodell der PR-Pipeline
 
@@ -66,7 +33,7 @@ siehe `DEPLOYMENT.md` Abschnitt 4a.
 
 ## Tageslauf-Timing & Robustheit
 
-Der Score-Cron läuft **täglich 09:00 UTC** und bewertet „gestern" (UTC).
+Der Score-Cron läuft *täglich* und bewertet „gestern" (UTC).
 ENTSO-E veröffentlicht *Actual Total Load* (6.1.A) regulatorisch bis H+1,
 real treten jedoch TSO-Verzögerungen, einzelne fehlende Stunden (DST) und
 „HTTP 200 + No matching data" auf. 09:00 UTC gibt Sicherheitsmarge nach der
@@ -96,13 +63,13 @@ Nur Personen aus `github_handles` dürfen PRs für dieses Team mergen
 
 ## Score-Logik
 
-- **Primär**: MAE [MW] über die 24 Stunden eines Zieltages.
-- **Aggregat (öffentliches Ranking)**: mittlere MAE = Summe der
+- *Primär*: MAE [MW] über die 24 Stunden eines Zieltages.
+- *Aggregat (öffentliches Ranking)*: mittlere MAE = Summe der
   Tages-MAEs / Anzahl bewerteter Tage (aufsteigend).
-- **LOCF**: Reicht ein Team an einem Zieltag keine Prognose ein, wird
+- *LOCF*: Reicht ein Team an einem Zieltag keine Prognose ein, wird
   die jeweils letzte vorhandene Submission des Teams fortgeschrieben
   (last observation carried forward) und zählt als bewerteter Tag.
-- **Tie-Break**: Anzahl bewerteter Tage (absteigend).
+- *Tie-Break*: Anzahl bewerteter Tage (absteigend).
 
 Details und die Formeln in `lecture/12_challenge.qmd` (§
 "Bewertungsmethodik im Detail").
