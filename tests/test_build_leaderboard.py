@@ -35,6 +35,7 @@ def _seed_teams(tmp_path: Path):
             {"id": "team_4", "display_name": "Team 4", "github_handles": []},
             {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": []},
             {"id": "neura", "display_name": "Team Neura", "github_handles": []},
+            {"id": "entsoe", "display_name": "Entso-E", "github_handles": []},
         ]
     }))
 
@@ -206,3 +207,61 @@ def test_main_omits_logo_when_absent(tmp_path):
     # The CSS rule `.hero-logo {` is always present; the <img> tag is not.
     assert 'class="hero-logo"' not in html
     assert "data:image/png;base64," not in html
+
+
+# --------------------------------------------------------------------------
+# ENTSO-E day-ahead forecast as a ranked leaderboard baseline.
+# --------------------------------------------------------------------------
+
+def _actuals_frame(date: str = "2026-05-26", with_forecast: bool = True,
+                   hours: int = 24) -> pd.DataFrame:
+    ts = pd.date_range(f"{date}T00:00:00Z", periods=hours, freq="h", tz="UTC")
+    data = {
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "load_mw": [1000.0] * hours,
+    }
+    if with_forecast:
+        data["entsoe_forecast_mw"] = [1100.0] * hours   # constant error of 100
+    return pd.DataFrame(data)
+
+
+def test_entsoe_baseline_scores_computes_mae():
+    out = bl.entsoe_baseline_scores(_actuals_frame("2026-05-26"), pd.DataFrame())
+    assert list(out["team_id"]) == ["entsoe"]
+    assert out["target_date"].iloc[0] == "2026-05-26"
+    assert out["mae"].iloc[0] == 100.0          # |1100 - 1000|
+    assert not bool(out["carried_forward"].iloc[0])
+
+
+def test_entsoe_baseline_none_without_forecast_column():
+    df = _actuals_frame("2026-05-26", with_forecast=False)
+    assert bl.entsoe_baseline_scores(df, pd.DataFrame()).empty
+
+
+def test_entsoe_baseline_none_when_actuals_missing():
+    assert bl.entsoe_baseline_scores(None, pd.DataFrame()).empty
+
+
+def test_entsoe_baseline_requires_full_day():
+    df = _actuals_frame("2026-05-26", hours=10)   # partial day
+    assert bl.entsoe_baseline_scores(df, pd.DataFrame()).empty
+
+
+def test_entsoe_baseline_skips_already_scored_day():
+    # A real entsoe score in scores.parquet takes precedence over the baseline.
+    existing = pd.DataFrame([{"team_id": "entsoe", "target_date": "2026-05-26",
+                              "mae": 42.0}])
+    assert bl.entsoe_baseline_scores(_actuals_frame("2026-05-26"), existing).empty
+
+
+def test_main_ranks_entsoe_baseline_in_leaderboard(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")        # carries entsoe_forecast_mw
+    bl.main()
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    assert "entsoe" in [r["team_id"] for r in data]
+    assert "Entso-E" in [r["display_name"] for r in data]
