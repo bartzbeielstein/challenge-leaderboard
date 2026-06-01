@@ -89,35 +89,6 @@
 
   <p class="meta">Stand: {{ generated_at }} UTC.</p>
 
-  {% if figs and figs.forecast %}
-  <section class="card">
-    <h2>Prognose vs. Ist-Last</h2>
-    <p class="meta">
-      Stündliche 24-h-Prognose jedes Teams gegen die tatsächlich gemessene
-      Netzlast (ENTSO-E Actual Total Load, DE). Zieltag oben rechts wählbar.
-    </p>
-    {{ figs.forecast | safe }}
-  </section>
-  {% endif %}
-
-  {% if figs and figs.leaderboard %}
-  <section class="card">
-    <h2>Mittlere MAE je Team</h2>
-    {{ figs.leaderboard | safe }}
-  </section>
-  {% endif %}
-
-  {% if figs and figs.mae_time %}
-  <section class="card">
-    <h2>MAE-Verlauf</h2>
-    <p class="meta">
-      Tages-MAE je Team über die Zeit. Offene Marker kennzeichnen via LOCF
-      fortgeschriebene Tage (keine frische Submission).
-    </p>
-    {{ figs.mae_time | safe }}
-  </section>
-  {% endif %}
-
   <section class="card">
     <h2>Leaderboard</h2>
     {% if rows %}
@@ -146,6 +117,36 @@
       <p class="empty">Noch keine bewerteten Submissions.</p>
     {% endif %}
   </section>
+
+  {% if figs and figs.forecast %}
+  <section class="card">
+    <h2>Prognose vs. Ist-Last</h2>
+    <p class="meta">
+      Stündliche 24-h-Prognose jedes Teams gegen die tatsächlich gemessene
+      Netzlast (ENTSO-E Actual Total Load, DE). Die gestrichelte Linie ist die
+      ENTSO-E-Day-ahead-Prognose als Referenz-Baseline. Zieltag oben rechts wählbar.
+    </p>
+    {{ figs.forecast | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard %}
+  <section class="card">
+    <h2>Mittlere MAE je Team</h2>
+    {{ figs.leaderboard | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.mae_time %}
+  <section class="card">
+    <h2>MAE-Verlauf</h2>
+    <p class="meta">
+      Tages-MAE je Team über die Zeit. Offene Marker kennzeichnen via LOCF
+      fortgeschriebene Tage (keine frische Submission).
+    </p>
+    {{ figs.mae_time | safe }}
+  </section>
+  {% endif %}
 
   {% if daily and daily.dates %}
   <section class="card">

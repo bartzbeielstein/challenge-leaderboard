@@ -126,6 +126,7 @@ def _write_actuals(tmp_path, date: str):
     pd.DataFrame({
         "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "load_mw": [1000.0 + i for i in range(24)],
+        "entsoe_forecast_mw": [990.0 + i for i in range(24)],
     }).to_parquet(tmp_path / "data" / "actual_load.parquet", index=False)
 
 
@@ -155,6 +156,8 @@ def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
     assert "Prognose vs. Ist-Last" not in html
     # The Plotly library bundle is embedded exactly once.
     assert html.count("plotly.js v") == 1
+    # Layout: the Leaderboard table comes before the charts.
+    assert html.index("<h2>Leaderboard</h2>") < html.index("Mittlere MAE je Team")
 
 
 def test_main_renders_forecast_chart_when_actuals_present(tmp_path):
@@ -169,6 +172,10 @@ def test_main_renders_forecast_chart_when_actuals_present(tmp_path):
     html = (tmp_path / "public" / "index.html").read_text()
     assert 'id="fig-forecast"' in html
     assert "Prognose vs. Ist-Last" in html
+    # ENTSO-E day-ahead forecast plotted as a baseline trace.
+    assert "ENTSO-E Prognose" in html
+    # Layout: the Leaderboard table is above the forecast chart.
+    assert html.index("<h2>Leaderboard</h2>") < html.index("Prognose vs. Ist-Last")
 
 
 def test_main_empty_scores_does_not_embed_plotly_bundle(tmp_path):

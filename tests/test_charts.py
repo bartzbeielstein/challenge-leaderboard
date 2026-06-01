@@ -16,13 +16,17 @@ import charts
 # Builders
 # --------------------------------------------------------------------------
 
-def _actuals(date: str = "2026-05-26", load: float = 1000.0) -> pd.DataFrame:
+def _actuals(date: str = "2026-05-26", load: float = 1000.0,
+             with_forecast: bool = True) -> pd.DataFrame:
     ts = pd.date_range(f"{date}T00:00:00Z", periods=24, freq="h", tz="UTC")
-    return pd.DataFrame({
+    data = {
         "ts": ts,
         "date": ts.strftime("%Y-%m-%d"),
         "load_mw": [load + i for i in range(24)],
-    })
+    }
+    if with_forecast:
+        data["entsoe_forecast_mw"] = [load + 30 + i for i in range(24)]
+    return pd.DataFrame(data)
 
 
 def _sub(date: str = "2026-05-26") -> pd.DataFrame:
@@ -75,6 +79,19 @@ def test_load_actuals_reads_parquet(tmp_path):
     assert len(df) == 24
 
 
+def test_load_actuals_keeps_forecast_column(tmp_path):
+    p = tmp_path / "actual_load.parquet"
+    ts = pd.date_range("2026-05-26T00:00:00Z", periods=24, freq="h", tz="UTC")
+    pd.DataFrame({
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "load_mw": [1000.0] * 24,
+        "entsoe_forecast_mw": [990.0] * 24,
+    }).to_parquet(p, index=False)
+    df = charts.load_actuals(p)
+    assert "entsoe_forecast_mw" in df.columns
+    assert df["entsoe_forecast_mw"].iloc[0] == 990.0
+
+
 def test_load_submissions_reads_team_csvs(tmp_path):
     team_dir = tmp_path / "submissions" / "team_4"
     team_dir.mkdir(parents=True)
@@ -115,13 +132,31 @@ def test_forecast_builds_figure_with_actual_and_team_traces():
     assert "Ist-Last" in names
     # MAE pulled into legend label (figure.py-style).
     assert any("Team 4" in n and "MAE" in n for n in names)
-    # Single day -> exactly one actual + two team traces, all visible.
+    # Single day -> exactly one actual trace, all traces visible.
     assert sum(1 for t in fig.data if t.name == "Ist-Last") == 1
     assert all(t.visible for t in fig.data)
 
 
+def test_forecast_includes_entsoe_baseline_trace():
+    actuals = _actuals("2026-05-26", with_forecast=True)
+    subs = {"team_4": {"2026-05-26": _sub("2026-05-26")}}
+    fig = charts.fig_forecast_vs_actual(actuals, subs, _scores(), NAMES)
+    entsoe = [t for t in fig.data if t.name.startswith("ENTSO-E Prognose")]
+    assert len(entsoe) == 1                       # one ENTSO-E baseline trace
+    assert entsoe[0].line.dash == "dash"          # distinct dashed style
+    assert "MAE" in entsoe[0].name                # MAE in the legend label
+
+
+def test_forecast_no_entsoe_trace_when_column_absent():
+    actuals = _actuals("2026-05-26", with_forecast=False)
+    subs = {"team_4": {"2026-05-26": _sub("2026-05-26")}}
+    fig = charts.fig_forecast_vs_actual(actuals, subs, _scores(), NAMES)
+    assert not any(t.name.startswith("ENTSO-E Prognose") for t in fig.data)
+
+
 def test_forecast_multi_day_adds_dropdown_and_hides_nondefault():
-    actuals = pd.concat([_actuals("2026-05-26"), _actuals("2026-05-27")],
+    actuals = pd.concat([_actuals("2026-05-26", with_forecast=False),
+                         _actuals("2026-05-27", with_forecast=False)],
                         ignore_index=True)
     subs = {"team_4": {"2026-05-26": _sub("2026-05-26"),
                        "2026-05-27": _sub("2026-05-27")}}
@@ -129,9 +164,9 @@ def test_forecast_multi_day_adds_dropdown_and_hides_nondefault():
     assert fig.layout.updatemenus, "multi-day chart needs a date dropdown"
     buttons = fig.layout.updatemenus[0].buttons
     assert [b.label for b in buttons] == ["2026-05-26", "2026-05-27"]
-    # Default visible = latest day; earlier day hidden.
+    # Default visible = latest day; earlier day hidden (actual + team_4 per day).
     visibilities = [bool(t.visible) for t in fig.data]
-    assert visibilities.count(True) == 2   # actual + team_4 for 2026-05-27
+    assert visibilities.count(True) == 2
     assert visibilities.count(False) == 2
 
 

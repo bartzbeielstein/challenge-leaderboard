@@ -69,6 +69,8 @@ def load_actuals(path: Path) -> pd.DataFrame | None:
     df["ts"] = pd.to_datetime(df["timestamp_utc"], utc=True)
     df["date"] = df["ts"].dt.strftime("%Y-%m-%d")
     df["load_mw"] = df["load_mw"].astype(float)
+    if "entsoe_forecast_mw" in df.columns:
+        df["entsoe_forecast_mw"] = df["entsoe_forecast_mw"].astype(float)
     return df.sort_values("ts").reset_index(drop=True)
 
 
@@ -151,6 +153,22 @@ def fig_forecast_vs_actual(
         ))
         day_trace_idx[d].append(idx)
         idx += 1
+        # ENTSO-E Day-ahead-Forecast als gestrichelte Referenzlinie (figure.py-
+        # Stil: eigene Spur mit MAE in der Legende). Nur wenn vorhanden.
+        if "entsoe_forecast_mw" in a.columns and a["entsoe_forecast_mw"].notna().any():
+            fc = a["entsoe_forecast_mw"]
+            mae = (fc - a["load_mw"]).abs().mean()
+            label = ("ENTSO-E Prognose"
+                     + (f" · MAE {mae:.0f}" if pd.notna(mae) else ""))
+            fig.add_trace(go.Scatter(
+                x=a["ts"], y=fc, mode="lines+markers",
+                name=label,
+                line=dict(color="#64748b", width=2, dash="dash"),
+                marker=dict(size=4),
+                visible=False,
+            ))
+            day_trace_idx[d].append(idx)
+            idx += 1
         for ci, team_id in enumerate(sorted(submissions)):
             if d not in submissions[team_id]:
                 continue

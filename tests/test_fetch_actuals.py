@@ -16,11 +16,23 @@ import fetch_actuals as fa
 import score_day as sd
 
 
+def _fake_frame(target_date: str) -> pd.DataFrame:
+    """Stand-in for score_day._download_load_frame: actual + forecast columns."""
+    idx = pd.date_range(f"{target_date}T00:00:00Z", periods=24, freq="h", tz="UTC")
+    return pd.DataFrame({
+        "Actual Total Load": [1000.0 + i for i in range(24)],
+        "Day-ahead Total Load Forecast": [990.0 + i for i in range(24)],
+    }, index=idx)
+
+
 @pytest.fixture(autouse=True)
 def isolate_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(fa, "ACTUALS_PATH", tmp_path / "data" / "actual_load.parquet")
     monkeypatch.setattr(sd, "SUBMISSIONS_DIR", tmp_path / "submissions")
     monkeypatch.setattr(fa, "_today_utc", lambda: date(2026, 6, 1))
+    # Default-mock the forecast download so tests stay hermetic even when a real
+    # ENTSOE_API_KEY is present in the environment (no network in CI/local).
+    monkeypatch.setattr(sd, "_download_load_frame", _fake_frame)
     (tmp_path / "submissions").mkdir()
     (tmp_path / "data").mkdir()
     yield
@@ -110,10 +122,22 @@ def test_fetch_one_day_skips_when_not_ready(monkeypatch):
 def test_fetch_one_day_builds_tidy_frame(monkeypatch):
     monkeypatch.setattr(sd, "fetch_ground_truth", lambda d: _series(d))
     df = fa.fetch_one_day("2026-05-26")
-    assert list(df.columns) == ["timestamp_utc", "load_mw"]
+    assert list(df.columns) == ["timestamp_utc", "load_mw", "entsoe_forecast_mw"]
     assert len(df) == 24
     assert df["timestamp_utc"].iloc[0] == "2026-05-26T00:00:00Z"
     assert df["load_mw"].iloc[0] == 1000.0
+    assert df["entsoe_forecast_mw"].iloc[0] == 990.0   # from _fake_frame
+
+
+def test_fetch_one_day_forecast_nan_when_download_fails(monkeypatch):
+    monkeypatch.setattr(sd, "fetch_ground_truth", lambda d: _series(d))
+
+    def boom(_d):
+        raise RuntimeError("ENTSOE_API_KEY ist nicht gesetzt")
+    monkeypatch.setattr(sd, "_download_load_frame", boom)
+    df = fa.fetch_one_day("2026-05-26")
+    assert df["load_mw"].iloc[0] == 1000.0          # actual unaffected
+    assert df["entsoe_forecast_mw"].isna().all()    # forecast best-effort -> NaN
 
 
 # --------------------------------------------------------------------------

@@ -22,8 +22,10 @@ also nickt `validate-pr.yml` ihn pass-through ab, `auto-merge.yml`
 mergt ihn bewusst nicht automatisch).
 
 Datei-Schema (eine Zeile pro UTC-Stunde):
-    timestamp_utc : str   ISO8601 UTC, z. B. '2026-06-01T13:00:00Z'
-    load_mw       : float Actual Total Load [MW]
+    timestamp_utc      : str   ISO8601 UTC, z. B. '2026-06-01T13:00:00Z'
+    load_mw            : float Actual Total Load [MW]
+    entsoe_forecast_mw : float ENTSO-E Day-ahead Total Load Forecast [MW]
+                               (best-effort; NaN, falls nicht verfügbar)
 """
 from __future__ import annotations
 
@@ -99,24 +101,47 @@ def already_complete(path: Path) -> set[str]:
     return set(counts[counts >= 24].index)
 
 
-def fetch_one_day(target_date: str) -> pd.DataFrame | None:
-    """Ein Tag Actual-Load als Tidy-Frame, oder None falls noch nicht verfügbar.
+def _forecast_for(target_date: str, index: pd.DatetimeIndex) -> pd.Series:
+    """Best-effort ENTSO-E-Day-ahead-Forecast, auf ``index`` ausgerichtet.
 
-    Nutzt ``score_day.fetch_ground_truth`` (Retry/Backoff +
-    Vollständigkeitsprüfung). ``GroundTruthNotReady`` → überspringen
-    (None). Ein fehlender API-Key (``RuntimeError``, *nicht*
-    ``GroundTruthNotReady``) propagiert und lässt den Lauf laut scheitern.
+    Greift auf denselben Download wie das Scoring zu
+    (``score_day._download_load_frame``) und wählt die Forecast-Spalte.
+    Schlägt der Abruf fehl oder fehlt die Spalte, werden NaN geliefert — der
+    Forecast ist optional und darf den (bereits vollständigen) Actual-Load
+    nicht blockieren.
     """
     try:
-        series = sd.fetch_ground_truth(target_date)
+        frame = sd._download_load_frame(target_date)
+    except Exception:
+        return pd.Series(index=index, dtype=float)
+    fcol = next((c for c in frame.columns if "forecast" in c.lower()), None)
+    if fcol is None:
+        return pd.Series(index=index, dtype=float)
+    return frame[fcol].astype(float).reindex(index)
+
+
+def fetch_one_day(target_date: str) -> pd.DataFrame | None:
+    """Ein Tag Actual-Load (+ ENTSO-E-Forecast) als Tidy-Frame, oder None.
+
+    Nutzt ``score_day.fetch_ground_truth`` (Retry/Backoff +
+    Vollständigkeitsprüfung) für den Actual-Load. ``GroundTruthNotReady`` →
+    überspringen (None). Ein fehlender API-Key (``RuntimeError``, *nicht*
+    ``GroundTruthNotReady``) propagiert und lässt den Lauf laut scheitern.
+    Der ENTSO-E-Day-ahead-Forecast wird best-effort ergänzt (NaN, falls nicht
+    verfügbar).
+    """
+    try:
+        actual = sd.fetch_ground_truth(target_date)
     except sd.GroundTruthNotReady as exc:
         print(f"[fetch_actuals] {target_date}: noch nicht verfügbar — "
               f"übersprungen ({exc})")
         return None
-    stamps = pd.DatetimeIndex(series.index).strftime(TS_FORMAT)
+    forecast = _forecast_for(target_date, actual.index)
+    stamps = pd.DatetimeIndex(actual.index).strftime(TS_FORMAT)
     return pd.DataFrame({
         "timestamp_utc": list(stamps),
-        "load_mw": series.to_numpy(dtype=float),
+        "load_mw": actual.to_numpy(dtype=float),
+        "entsoe_forecast_mw": forecast.to_numpy(dtype=float),
     })
 
 
