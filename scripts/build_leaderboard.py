@@ -11,6 +11,7 @@ Ranking-Logik:
 """
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -124,7 +125,22 @@ def build_figures(
     }
 
 
-def render(board: pd.DataFrame, daily: dict, figs: dict[str, str]) -> None:
+def load_logo_uri(path: Path) -> str:
+    """Logo als base64-Data-URI (self-contained, wie das Plotly-Bundle).
+
+    '' wenn die Datei fehlt — der Hero rendert dann ohne Logo (Graceful
+    Degradation). Vermeidet einen separaten Asset-Copy-Schritt nach
+    ``public/`` und funktioniert offline.
+    """
+    if not Path(path).exists():
+        return ""
+    data = base64.b64encode(Path(path).read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{data}"
+
+
+def render(
+    board: pd.DataFrame, daily: dict, figs: dict[str, str], logo_uri: str = "",
+) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
 
@@ -141,6 +157,7 @@ def render(board: pd.DataFrame, daily: dict, figs: dict[str, str]) -> None:
         daily=daily,
         figs=figs,
         plotlyjs=plotlyjs,
+        logo_uri=logo_uri,
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
@@ -163,7 +180,8 @@ def main() -> None:
     board = aggregate(scores, names)
     daily = daily_breakdown(scores, names, list(board["team_id"]))
     figs = build_figures(board, daily, scores, names)
-    render(board, daily, figs)
+    logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
+    render(board, daily, figs, logo_uri)
     print(f"[build] Leaderboard mit {len(board)} Teams "
           f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 

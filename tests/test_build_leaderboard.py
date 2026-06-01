@@ -176,3 +176,26 @@ def test_main_empty_scores_does_not_embed_plotly_bundle(tmp_path):
     bl.main()  # no scores -> no charts -> no 4.8 MB bundle
     html = (tmp_path / "public" / "index.html").read_text()
     assert "plotly.js v" not in html
+
+
+def test_load_logo_uri_missing_is_empty(tmp_path):
+    assert bl.load_logo_uri(tmp_path / "logo" / "spotlogo.png") == ""
+
+
+def test_main_embeds_logo_when_present(tmp_path):
+    _seed_teams(tmp_path)
+    (tmp_path / "logo").mkdir()
+    (tmp_path / "logo" / "spotlogo.png").write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "data:image/png;base64," in html
+    assert 'class="hero-logo"' in html
+
+
+def test_main_omits_logo_when_absent(tmp_path):
+    _seed_teams(tmp_path)
+    bl.main()  # no logo file under tmp_path -> hero renders without it
+    html = (tmp_path / "public" / "index.html").read_text()
+    # The CSS rule `.hero-logo {` is always present; the <img> tag is not.
+    assert 'class="hero-logo"' not in html
+    assert "data:image/png;base64," not in html
