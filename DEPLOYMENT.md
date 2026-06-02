@@ -411,20 +411,17 @@ gh pr create --fill --base main
 gh pr merge --squash --admin
 ```
 
-**3. Redeploy.** `build-and-deploy.yml` re-rendert die Seite nach jedem
-`Daily Scoring`-Lauf (`workflow_run`-Trigger) aus der dann committeten
-`actual_load.parquet`. Für ein **sofortiges** Update nach einem reinen
-Ist-Load-Commit den Build manuell anstoßen:
+**3. Redeploy** passiert automatisch: Sobald `data/actual_load.parquet`
+auf `main` landet, startet `build-and-deploy.yml` — die Datei steht in
+dessen `push`-`paths:`-Filter (neben `data/scores.parquet`, `teams.yml`,
+dem Template, `scripts/build_leaderboard.py` und `scripts/charts.py`).
+Zusätzlich re-rendert der `workflow_run`-Trigger die Seite nach jedem
+`Daily Scoring`-Lauf aus der committeten `actual_load.parquet`.
+
+Ein manueller Anstoß ist nur nötig, um **ohne neuen Commit** neu zu bauen
+(z. B. nach einem direkten Push an `main` ohne PR):
 
 ```sh
 gh workflow run "Build & Deploy Leaderboard" --ref main
 gh run watch
 ```
-
-> **Hinweis (Auto-Trigger):** Der `push`-Trigger von `build-and-deploy.yml`
-> lauscht derzeit nur auf `data/scores.parquet`, `teams.yml`, das Template
-> und `scripts/build_leaderboard.py` — **nicht** auf
-> `data/actual_load.parquet`. Ein *reiner* Ist-Load-Commit startet den Build
-> daher nicht von selbst (Schritt 3 oben deckt das ab). Wer den Build auch
-> auf Actuals-Änderungen reagieren lassen will, nimmt
-> `data/actual_load.parquet` mit in dessen `paths:`-Liste auf.
