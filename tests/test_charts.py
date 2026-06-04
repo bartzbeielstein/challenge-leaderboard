@@ -154,20 +154,29 @@ def test_forecast_no_entsoe_trace_when_column_absent():
     assert not any(t.name.startswith("ENTSO-E Prognose") for t in fig.data)
 
 
-def test_forecast_multi_day_adds_dropdown_and_hides_nondefault():
+def test_forecast_multi_day_exposes_calendar_meta_and_hides_nondefault():
     actuals = pd.concat([_actuals("2026-05-26", with_forecast=False),
                          _actuals("2026-05-27", with_forecast=False)],
                         ignore_index=True)
     subs = {"team_4": {"2026-05-26": _sub("2026-05-26"),
                        "2026-05-27": _sub("2026-05-27")}}
     fig = charts.fig_forecast_vs_actual(actuals, subs, _scores(), NAMES)
-    assert fig.layout.updatemenus, "multi-day chart needs a date dropdown"
-    buttons = fig.layout.updatemenus[0].buttons
-    assert [b.label for b in buttons] == ["2026-05-26", "2026-05-27"]
-    # Default visible = latest day; earlier day hidden (actual + team_4 per day).
+    # Datumsauswahl läuft über das Kalender-Widget im Template — die
+    # nötigen Daten stehen in layout.meta, kein Plotly-Dropdown mehr.
+    assert not fig.layout.updatemenus
+    meta = fig.layout.meta
+    assert meta["days"] == ["2026-05-26", "2026-05-27"]
+    assert meta["titlePrefix"] == "Prognose vs. Ist-Last"
+    # Tag→Trace-Indizes: disjunkt, decken alle Traces ab (actual + team_4 je Tag).
+    assert set(meta["dayTraces"]) == {"2026-05-26", "2026-05-27"}
+    all_idx = sorted(i for idxs in meta["dayTraces"].values() for i in idxs)
+    assert all_idx == list(range(len(fig.data)))
+    # Default visible = latest day; earlier day hidden.
     visibilities = [bool(t.visible) for t in fig.data]
     assert visibilities.count(True) == 2
     assert visibilities.count(False) == 2
+    for i in meta["dayTraces"]["2026-05-27"]:
+        assert fig.data[i].visible
 
 
 # --------------------------------------------------------------------------

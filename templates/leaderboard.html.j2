@@ -61,6 +61,45 @@
     td.locf { color: #9aa1ab; }
     td.miss { color: #d0d4da; text-align: right; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
+    /* Kalender-Datumswahl fürs Forecast-Chart — im Dokumentfluss,
+       überlappt den Plot nie. */
+    .cal-wrap { margin: 0 0 1rem; }
+    .cal-toggle {
+      display: inline-flex; align-items: center; gap: .45rem;
+      font: inherit; font-weight: 600; color: var(--accent);
+      background: var(--accent-soft); border: 1px solid var(--line);
+      border-radius: 999px; padding: .4rem .95rem; cursor: pointer;
+    }
+    .cal-toggle:hover { border-color: var(--accent); }
+    .cal {
+      display: none; margin-top: .6rem; padding: .8rem .9rem;
+      width: max-content; background: var(--card);
+      border: 1px solid var(--line); border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+    .cal.open { display: block; }
+    .cal-head { display: flex; align-items: center; justify-content: space-between;
+                gap: .5rem; margin-bottom: .55rem; }
+    .cal-title { font-weight: 600; font-size: .95rem; min-width: 9.5rem;
+                 text-align: center; }
+    .cal-nav {
+      width: 30px; height: 30px; font: inherit; line-height: 1;
+      color: var(--ink); background: none; border: 1px solid var(--line);
+      border-radius: 8px; cursor: pointer;
+    }
+    .cal-nav:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .cal-nav:disabled { opacity: .3; cursor: default; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 38px); gap: 3px; }
+    .cal-dow { text-align: center; font-size: .7rem; color: var(--muted);
+               text-transform: uppercase; letter-spacing: .03em; padding: .15rem 0; }
+    .cal-day {
+      height: 34px; font: inherit; font-size: .85rem; text-align: center;
+      color: #c6cbd3; background: none; border: none; border-radius: 9px;
+    }
+    .cal-day.avail { color: var(--ink); background: var(--accent-soft);
+                     font-weight: 600; cursor: pointer; }
+    .cal-day.avail:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .cal-day.sel { background: var(--accent); color: #fff; }
     .rank-badge { display: inline-block; min-width: 1.5rem; text-align: center;
                   font-weight: 600; }
     footer { color: var(--muted); font-size: .88rem; margin-top: 2rem;
@@ -124,9 +163,134 @@
     <p class="meta">
       Stündliche 24-h-Prognose jedes Teams gegen die tatsächlich gemessene
       Netzlast (ENTSO-E Actual Total Load, DE). Die gestrichelte Linie ist die
-      ENTSO-E-Day-ahead-Prognose als Referenz-Baseline. Zieltag oben rechts wählbar.
+      ENTSO-E-Day-ahead-Prognose als Referenz-Baseline. Zieltag über den
+      Kalender wählbar.
     </p>
+    <div class="cal-wrap" id="cal-forecast" hidden>
+      <button type="button" class="cal-toggle" id="cal-forecast-toggle"
+              aria-expanded="false" aria-controls="cal-forecast-panel">
+        <span aria-hidden="true">📅</span>
+        <span>Zieltag: <span id="cal-forecast-sel"></span></span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      <div class="cal" id="cal-forecast-panel" role="dialog" aria-label="Zieltag wählen">
+        <div class="cal-head">
+          <button type="button" class="cal-nav" id="cal-forecast-prev"
+                  aria-label="Voriger Monat">‹</button>
+          <span class="cal-title" id="cal-forecast-title"></span>
+          <button type="button" class="cal-nav" id="cal-forecast-next"
+                  aria-label="Nächster Monat">›</button>
+        </div>
+        <div class="cal-grid" id="cal-forecast-grid"></div>
+      </div>
+    </div>
     {{ figs.forecast | safe }}
+    <script>
+    (function () {
+      "use strict";
+      var MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
+                    "August", "September", "Oktober", "November", "Dezember"];
+      var DOWS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      var tries = 0;
+
+      function init() {
+        var gd = document.getElementById("fig-forecast");
+        if (!gd || !gd.layout || !gd.layout.meta) {
+          if (tries++ < 100) { setTimeout(init, 50); }
+          return;
+        }
+        var meta = gd.layout.meta;
+        var days = meta.days || [];
+        if (days.length < 2) { return; }  // nichts zu wählen
+
+        var wrap = document.getElementById("cal-forecast");
+        var toggle = document.getElementById("cal-forecast-toggle");
+        var panel = document.getElementById("cal-forecast-panel");
+        var selLabel = document.getElementById("cal-forecast-sel");
+        var title = document.getElementById("cal-forecast-title");
+        var grid = document.getElementById("cal-forecast-grid");
+        var prev = document.getElementById("cal-forecast-prev");
+        var next = document.getElementById("cal-forecast-next");
+
+        var avail = {};
+        days.forEach(function (d) { avail[d] = true; });
+        var selected = days[days.length - 1];
+        var view = { y: +selected.slice(0, 4), m: +selected.slice(5, 7) - 1 };
+        var minKey = days[0].slice(0, 7), maxKey = days[days.length - 1].slice(0, 7);
+
+        function monthKey(y, m) {
+          return y + "-" + String(m + 1).padStart(2, "0");
+        }
+
+        function selectDay(d) {
+          selected = d;
+          var traces = meta.dayTraces[d] || [];
+          var vis = gd.data.map(function (_, i) {
+            return traces.indexOf(i) !== -1;
+          });
+          Plotly.update(gd, { visible: vis },
+                        { "title.text": meta.titlePrefix + " — " + d });
+          selLabel.textContent = d;
+          panel.classList.remove("open");
+          toggle.setAttribute("aria-expanded", "false");
+          renderGrid();
+        }
+
+        function renderGrid() {
+          title.textContent = MONTHS[view.m] + " " + view.y;
+          prev.disabled = monthKey(view.y, view.m) <= minKey;
+          next.disabled = monthKey(view.y, view.m) >= maxKey;
+          grid.textContent = "";
+          DOWS.forEach(function (n) {
+            var el = document.createElement("span");
+            el.className = "cal-dow";
+            el.textContent = n;
+            grid.appendChild(el);
+          });
+          var first = new Date(Date.UTC(view.y, view.m, 1));
+          var offset = (first.getUTCDay() + 6) % 7;  // Mo = 0
+          var nDays = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
+          for (var i = 0; i < offset; i++) {
+            grid.appendChild(document.createElement("span"));
+          }
+          for (var day = 1; day <= nDays; day++) {
+            var iso = monthKey(view.y, view.m) + "-" + String(day).padStart(2, "0");
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "cal-day";
+            btn.textContent = day;
+            if (avail[iso]) {
+              btn.classList.add("avail");
+              if (iso === selected) { btn.classList.add("sel"); }
+              btn.addEventListener("click", selectDay.bind(null, iso));
+            } else {
+              btn.disabled = true;
+            }
+            grid.appendChild(btn);
+          }
+        }
+
+        function shiftMonth(delta) {
+          var d = new Date(Date.UTC(view.y, view.m + delta, 1));
+          view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+          renderGrid();
+        }
+
+        prev.addEventListener("click", shiftMonth.bind(null, -1));
+        next.addEventListener("click", shiftMonth.bind(null, 1));
+        toggle.addEventListener("click", function () {
+          var open = panel.classList.toggle("open");
+          toggle.setAttribute("aria-expanded", String(open));
+        });
+
+        selLabel.textContent = selected;
+        renderGrid();
+        wrap.hidden = false;
+      }
+
+      init();
+    })();
+    </script>
   </section>
   {% endif %}
 

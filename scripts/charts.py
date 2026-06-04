@@ -118,9 +118,12 @@ def fig_forecast_vs_actual(
 ) -> go.Figure | None:
     """Ist-Last + 24h-Prognose jedes Teams für einen wählbaren Zieltag.
 
-    Datumsauswahl per Plotly-``updatemenus``-Dropdown: alle verfügbaren
-    Tage werden vorgerendert, der Button schaltet die ``visible``-Maske um
-    (voll statische Seite, kein eigenes JS). Default sichtbar: jüngster Tag.
+    Alle verfügbaren Tage werden vorgerendert (Default sichtbar: jüngster
+    Tag). Die Datumsauswahl übernimmt ein Kalender-Widget im Template
+    (außerhalb der Plot-Fläche); die dafür nötigen Daten — sortierte
+    Tagesliste und Tag→Trace-Indizes — stehen deterministisch in
+    ``layout.meta`` (``days``, ``dayTraces``, ``titlePrefix``) und werden
+    clientseitig über die ``visible``-Maske geschaltet.
     None, wenn keine Actuals vorliegen oder kein Tag mit Submissions
     überlappt.
     """
@@ -191,26 +194,15 @@ def fig_forecast_vs_actual(
     for i in day_trace_idx[default_day]:
         fig.data[i].visible = True
 
-    n = len(fig.data)
-    if len(days) > 1:
-        buttons = []
-        for d in days:
-            vis = [False] * n
-            for i in day_trace_idx[d]:
-                vis[i] = True
-            buttons.append(dict(
-                label=d, method="update",
-                args=[{"visible": vis},
-                      {"title": f"Prognose vs. Ist-Last — {d}"}],
-            ))
-        fig.update_layout(updatemenus=[dict(
-            buttons=buttons, direction="down", showactive=True,
-            x=1.0, xanchor="right", y=1.18, yanchor="top",
-            active=len(days) - 1,
-        )])
-
     _base_layout(fig, title=f"Prognose vs. Ist-Last — {default_day}",
                  yaxis_title="Last [MW]")
+    # Daten fürs Kalender-Widget im Template (CR-2: days sortiert,
+    # day_trace_idx in Einfüge- = Sortierreihenfolge).
+    fig.update_layout(meta=dict(
+        days=days,
+        dayTraces=day_trace_idx,
+        titlePrefix="Prognose vs. Ist-Last",
+    ))
     return fig
 
 

@@ -175,6 +175,10 @@ def test_main_renders_forecast_chart_when_actuals_present(tmp_path):
     assert "Prognose vs. Ist-Last" in html
     # ENTSO-E day-ahead forecast plotted as a baseline trace.
     assert "ENTSO-E Prognose" in html
+    # Calendar date picker shipped alongside the forecast figure (kept
+    # hidden by its JS when only one day is available).
+    assert 'id="cal-forecast"' in html
+    assert 'id="cal-forecast-grid"' in html
     # Layout: the Leaderboard table is above the forecast chart.
     assert html.index("<h2>Leaderboard</h2>") < html.index("Prognose vs. Ist-Last")
 
