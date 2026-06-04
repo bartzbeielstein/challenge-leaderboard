@@ -77,7 +77,9 @@ def daily_breakdown(
     ``rank_order`` fixes the row order to match the main leaderboard; dates
     are sorted ascending so the most recent column is rightmost. Cells for
     a (team, date) pair without a score are returned as None — the template
-    renders them as a dash.
+    renders them as a dash. Pro Spalte (Zieltag) markiert ``best: True``
+    die kleinste MAE (Tagesbester, im Template fett); bei Gleichstand alle
+    betroffenen Zellen.
     """
     if scores.empty:
         return {"dates": [], "teams": []}
@@ -93,19 +95,32 @@ def daily_breakdown(
             r = lookup.get((team_id, d))
             if r is None:
                 cells.append({"mae": None, "rmse": None, "mape": None,
-                              "carried": False})
+                              "carried": False, "best": False})
             else:
                 cells.append({
                     "mae": round(float(r["mae"]), 2),
                     "rmse": round(float(r["rmse"]), 2),
                     "mape": round(float(r["mape"]), 2),
                     "carried": bool(r.get("carried_forward", False)),
+                    "best": False,
                 })
         teams.append({
             "team_id": team_id,
             "display_name": names.get(team_id, team_id),
             "cells": cells,
         })
+
+    # Tagesbester je Spalte: kleinste (gerundete) MAE über alle Teams.
+    for j in range(len(dates)):
+        col = [t["cells"][j]["mae"] for t in teams
+               if t["cells"][j]["mae"] is not None]
+        if not col:
+            continue
+        best = min(col)
+        for t in teams:
+            c = t["cells"][j]
+            c["best"] = c["mae"] is not None and c["mae"] == best
+
     return {"dates": dates, "teams": teams}
 
 

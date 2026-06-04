@@ -90,6 +90,23 @@ def test_daily_breakdown_pivots_by_team_and_date():
     assert out["teams"][0]["cells"][1]["carried"] is True
     assert out["teams"][1]["cells"][0]["mae"] == 1931.26
     assert out["teams"][1]["cells"][1]["carried"] is False
+    # Tagesbester je Spalte: 05-12 nur team_4 (best), 05-26 gewinnt hot_rod
+    # (auch als LOCF-Wert); None-Zellen sind nie best.
+    assert out["teams"][1]["cells"][0]["best"] is True    # team_4 @ 05-12
+    assert out["teams"][0]["cells"][0]["best"] is False   # hot_rod @ 05-12 (None)
+    assert out["teams"][0]["cells"][1]["best"] is True    # hot_rod @ 05-26
+    assert out["teams"][1]["cells"][1]["best"] is False   # team_4 @ 05-26
+
+
+def test_daily_breakdown_marks_ties_as_best():
+    scores = pd.DataFrame([
+        {"team_id": "team_4", "target_date": "2026-05-26",
+         "mae": 100.0, "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-05-26",
+         "mae": 100.0, "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+    ])
+    out = bl.daily_breakdown(scores, {}, ["team_4", "hot_rod"])
+    assert all(t["cells"][0]["best"] for t in out["teams"])
 
 
 def test_main_writes_daily_section_in_html(tmp_path):
@@ -105,6 +122,9 @@ def test_main_writes_daily_section_in_html(tmp_path):
     assert "Tagesfehler je Team" in html
     assert "2026-05-12" in html
     assert "2026-05-26" in html
+    # Tagesbeste fett: je Spalte genau eine best-Zelle (hier 2 Spalten mit
+    # jeweils genau einem Wert).
+    assert html.count('class="num best"') == 2
     daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
     assert daily["dates"] == ["2026-05-12", "2026-05-26"]
 

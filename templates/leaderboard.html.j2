@@ -56,10 +56,13 @@
          letter-spacing: .03em; color: var(--muted); }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) td { background: #fcfcfd; }
-    tbody tr:first-child td { font-weight: 600; }
-    tbody tr:first-child td:first-child::before { content: "🏆 "; }
+    /* Gesamtbester (Zeile 1) nur in der Haupt-Rangliste hervorheben. */
+    table.ranking tbody tr:first-child td { font-weight: 600; }
+    table.ranking tbody tr:first-child td:first-child::before { content: "🏆 "; }
     td.locf { color: #9aa1ab; }
     td.miss { color: #d0d4da; text-align: right; }
+    /* Tagesbester je Spalte in „Tagesfehler je Team". */
+    td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
     /* Kalender-Datumswahl fürs Forecast-Chart — permanent geöffnet,
        rechts neben dem Plot (auf schmalen Screens darunter umbrechend);
@@ -131,7 +134,7 @@
   <section class="card">
     <h2>Leaderboard</h2>
     {% if rows %}
-    <table>
+    <table class="ranking">
       <thead>
         <tr>
           <th>#</th><th>Team</th>
@@ -309,7 +312,8 @@
   <section class="card">
     <h2>Tagesfehler je Team</h2>
     <p class="meta">
-      MAE [MW] pro Zieltag. Werte in <span class="locf">grau</span> kennzeichnen
+      MAE [MW] pro Zieltag. <b>Fett</b> markiert den besten Wert des Tages
+      (Spaltenminimum). Werte in <span class="locf">grau</span> kennzeichnen
       eine via LOCF fortgeschriebene Prognose (keine frische Submission für
       diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
       Forecast vorlag.
@@ -328,10 +332,8 @@
           {% for c in team.cells %}
             {% if c.mae is none %}
               <td class="miss">—</td>
-            {% elif c.carried %}
-              <td class="num locf" title="LOCF — fortgeschrieben">{{ "%.2f"|format(c.mae) }}</td>
             {% else %}
-              <td class="num">{{ "%.2f"|format(c.mae) }}</td>
+              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c.best else '' }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ "%.2f"|format(c.mae) }}</td>
             {% endif %}
           {% endfor %}
         </tr>
