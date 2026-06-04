@@ -42,14 +42,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          # workflow_run.pull_requests ist bei Fork-PRs leer → PR über die
-          # Head-SHA auflösen (funktioniert für Fork- wie Branch-PRs gleich).
-          PR=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
-                 --jq '[.[] | select(.state == "open")][0].number // empty')
-          if [[ -z "$PR" ]]; then
+          # workflow_run.pull_requests ist bei Fork-PRs leer, und
+          # GET /commits/{sha}/pulls indexiert OFFENE Fork-PRs nicht
+          # zuverlässig (liefert [] — deshalb hat der Bot nie einen
+          # Team-Fork-PR gemergt, nur eigene Branch-PRs). Stattdessen:
+          # offene PRs listen und über die Head-SHA matchen — das
+          # funktioniert für Fork- wie Branch-PRs gleich.
+          PR_JSON=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+                      --jq "[.[] | select(.head.sha == \"$HEAD_SHA\")][0] // empty")
+          if [[ -z "$PR_JSON" ]]; then
             echo "Kein offener PR für $HEAD_SHA — nichts zu tun."
             exit 0
           fi
+          PR=$(jq -r '.number' <<<"$PR_JSON")
+          HEAD_REPO=$(jq -r '.head.repo.full_name' <<<"$PR_JSON")
 
           # Härtung: nur PRs auto-mergen, die GENAU eine Datei unter
           # submissions/ ändern. Verhindert, dass ein durchgewinkter
@@ -61,5 +67,12 @@ jobs:
             exit 0
           fi
 
-          echo "Aktiviere Auto-merge (squash) für PR #$PR (${FILES[0]})."
-          gh pr merge "$PR" --repo "$REPO" --squash --auto --delete-branch
+          # --delete-branch nur bei Branch-PRs aus dem Basis-Repo: den
+          # Fork-Branch eines Teams kann (und soll) der Bot nicht löschen.
+          EXTRA=()
+          if [[ "$HEAD_REPO" == "$REPO" ]]; then
+            EXTRA+=(--delete-branch)
+          fi
+
+          echo "Aktiviere Auto-merge (squash) für PR #$PR (${FILES[0]}, head: $HEAD_REPO)."
+          gh pr merge "$PR" --repo "$REPO" --squash --auto "${EXTRA[@]}"
