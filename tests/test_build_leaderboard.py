@@ -43,16 +43,18 @@ def _seed_teams(tmp_path: Path):
 def test_aggregate_ranks_by_mean_mae_then_n_submissions_desc(tmp_path):
     _seed_teams(tmp_path)
     scores = pd.DataFrame([
-        {"team_id": "team_4", "mae": 1000.0},
-        {"team_id": "team_4", "mae": 3000.0},  # mean 2000, n=2
-        {"team_id": "hot_rod", "mae": 2000.0},  # mean 2000, n=1
-        {"team_id": "neura", "mae": 500.0},     # mean 500, n=1
+        {"team_id": "team_4", "mae": 1000.0, "rmse": 1200.0},
+        {"team_id": "team_4", "mae": 3000.0, "rmse": 3400.0},  # mean 2000, n=2
+        {"team_id": "hot_rod", "mae": 2000.0, "rmse": 2500.0},  # mean 2000, n=1
+        {"team_id": "neura", "mae": 500.0, "rmse": 700.0},      # mean 500, n=1
     ])
     names = bl.load_teams()
     out = bl.aggregate(scores, names)
     assert list(out["team_id"]) == ["neura", "team_4", "hot_rod"]
     # tie at 2000 -> more submissions ranks higher
     assert list(out["rank"]) == [1, 2, 3]
+    # mean_rmse analog zur mean_mae: Mittel der Tages-RMSEs.
+    assert list(out["mean_rmse"]) == [700.0, 2300.0, 2500.0]
 
 
 def test_main_writes_html_and_json(tmp_path):
@@ -67,9 +69,12 @@ def test_main_writes_html_and_json(tmp_path):
     html = (tmp_path / "public" / "index.html").read_text()
     assert "Team 4" in html
     assert "Hot Rod" in html
+    assert "Mean RMSE [MW]" in html
+    assert "Sum MAE" not in html
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert [r["team_id"] for r in data] == ["team_4", "hot_rod"]
     assert data[0]["rank"] == 1
+    assert data[0]["mean_rmse"] == 100.0
 
 
 def test_daily_breakdown_pivots_by_team_and_date():
@@ -91,11 +96,14 @@ def test_daily_breakdown_pivots_by_team_and_date():
     assert out["teams"][1]["cells"][0]["mae"] == 1931.26
     assert out["teams"][1]["cells"][1]["carried"] is False
     # Tagesbester je Spalte: 05-12 nur team_4 (best), 05-26 gewinnt hot_rod
-    # (auch als LOCF-Wert); None-Zellen sind nie best.
-    assert out["teams"][1]["cells"][0]["best"] is True    # team_4 @ 05-12
-    assert out["teams"][0]["cells"][0]["best"] is False   # hot_rod @ 05-12 (None)
-    assert out["teams"][0]["cells"][1]["best"] is True    # hot_rod @ 05-26
-    assert out["teams"][1]["cells"][1]["best"] is False   # team_4 @ 05-26
+    # (auch als LOCF-Wert); None-Zellen sind nie best. RMSE analog.
+    assert out["teams"][1]["cells"][0]["best_mae"] is True   # team_4 @ 05-12
+    assert out["teams"][0]["cells"][0]["best_mae"] is False  # hot_rod @ 05-12 (None)
+    assert out["teams"][0]["cells"][1]["best_mae"] is True   # hot_rod @ 05-26
+    assert out["teams"][1]["cells"][1]["best_mae"] is False  # team_4 @ 05-26
+    assert out["teams"][1]["cells"][0]["best_rmse"] is True  # team_4 @ 05-12
+    assert out["teams"][0]["cells"][1]["best_rmse"] is True  # hot_rod 2236 < 4090
+    assert out["teams"][1]["cells"][1]["best_rmse"] is False
 
 
 def test_daily_breakdown_marks_ties_as_best():
@@ -106,7 +114,8 @@ def test_daily_breakdown_marks_ties_as_best():
          "mae": 100.0, "rmse": 1.0, "mape": 1.0, "carried_forward": False},
     ])
     out = bl.daily_breakdown(scores, {}, ["team_4", "hot_rod"])
-    assert all(t["cells"][0]["best"] for t in out["teams"])
+    assert all(t["cells"][0]["best_mae"] for t in out["teams"])
+    assert all(t["cells"][0]["best_rmse"] for t in out["teams"])
 
 
 def test_main_writes_daily_section_in_html(tmp_path):
@@ -119,12 +128,13 @@ def test_main_writes_daily_section_in_html(tmp_path):
     ])
     bl.main()
     html = (tmp_path / "public" / "index.html").read_text()
-    assert "Tagesfehler je Team" in html
+    assert "Tagesfehler je Team [MAE]" in html
+    assert "Tagesfehler je Team [RMSE]" in html
     assert "2026-05-12" in html
     assert "2026-05-26" in html
-    # Tagesbeste fett: je Spalte genau eine best-Zelle (hier 2 Spalten mit
-    # jeweils genau einem Wert).
-    assert html.count('class="num best"') == 2
+    # Tagesbeste fett: je Spalte genau eine best-Zelle, in beiden Tabellen
+    # (hier 2 Spalten mit jeweils genau einem Wert -> 2 + 2).
+    assert html.count('class="num best"') == 4
     daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
     assert daily["dates"] == ["2026-05-12", "2026-05-26"]
 
@@ -172,6 +182,8 @@ def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
     bl.main()
     html = (tmp_path / "public" / "index.html").read_text()
     assert 'id="fig-leaderboard"' in html
+    assert 'id="fig-leaderboard-rmse"' in html
+    assert "Mittlerer RMSE je Team" in html
     assert 'id="fig-mae-time"' in html
     assert 'id="fig-forecast"' not in html       # no actuals -> self-disabled
     assert "Prognose vs. Ist-Last" not in html

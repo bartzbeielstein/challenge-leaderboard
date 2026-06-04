@@ -46,11 +46,13 @@ def _scores() -> pd.DataFrame:
 
 
 def _board() -> pd.DataFrame:
+    # hot_rod hat die bessere RMSE trotz schlechterer MAE — so testet der
+    # RMSE-Balken seine eigene Sortierung.
     return pd.DataFrame([
         {"rank": 1, "team_id": "team_4", "display_name": "Team 4",
-         "mean_mae": 125.0, "sum_mae": 250.0, "n_submissions": 2},
+         "mean_mae": 125.0, "mean_rmse": 290.0, "n_submissions": 2},
         {"rank": 2, "team_id": "hot_rod", "display_name": "Hot Rod",
-         "mean_mae": 200.0, "sum_mae": 200.0, "n_submissions": 1},
+         "mean_mae": 200.0, "mean_rmse": 240.0, "n_submissions": 1},
     ])
 
 
@@ -208,6 +210,21 @@ def test_mean_mae_bar_builds_horizontal_bar():
     assert fig.data[0].orientation == "h"
     assert list(fig.data[0].y) == ["Team 4", "Hot Rod"]
     assert fig.layout.yaxis.autorange == "reversed"  # rank 1 on top
+
+
+def test_mean_rmse_bar_sorts_by_rmse():
+    fig = charts.fig_mean_rmse_bar(_board())
+    assert isinstance(fig, go.Figure)
+    # Eigene Sortierung nach mean_rmse: Hot Rod (240) vor Team 4 (290).
+    assert list(fig.data[0].y) == ["Hot Rod", "Team 4"]
+    assert list(fig.data[0].x) == [240.0, 290.0]
+    assert fig.layout.title.text == "Mittlerer RMSE je Team"
+    assert fig.layout.xaxis.title.text == "Ø RMSE [MW]"
+
+
+def test_mean_rmse_bar_none_without_column():
+    board = _board().drop(columns=["mean_rmse"])
+    assert charts.fig_mean_rmse_bar(board) is None
 
 
 # --------------------------------------------------------------------------

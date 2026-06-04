@@ -139,7 +139,7 @@
         <tr>
           <th>#</th><th>Team</th>
           <th class="num">Mean MAE [MW]</th>
-          <th class="num">Sum MAE [MW]</th>
+          <th class="num">Mean RMSE [MW]</th>
           <th class="num">Bewertete Tage</th>
         </tr>
       </thead>
@@ -149,7 +149,7 @@
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
           <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
-          <td class="num">{{ "%.2f"|format(row.sum_mae) }}</td>
+          <td class="num">{{ "%.2f"|format(row.mean_rmse) }}</td>
           <td class="num">{{ row.n_submissions }}</td>
         </tr>
       {% endfor %}
@@ -297,6 +297,13 @@
   </section>
   {% endif %}
 
+  {% if figs and figs.leaderboard_rmse %}
+  <section class="card">
+    <h2>Mittlerer RMSE je Team</h2>
+    {{ figs.leaderboard_rmse | safe }}
+  </section>
+  {% endif %}
+
   {% if figs and figs.mae_time %}
   <section class="card">
     <h2>MAE-Verlauf</h2>
@@ -310,7 +317,7 @@
 
   {% if daily and daily.dates %}
   <section class="card">
-    <h2>Tagesfehler je Team</h2>
+    <h2>Tagesfehler je Team [MAE]</h2>
     <p class="meta">
       MAE [MW] pro Zieltag. <b>Fett</b> markiert den besten Wert des Tages
       (Spaltenminimum). Werte in <span class="locf">grau</span> kennzeichnen
@@ -333,7 +340,40 @@
             {% if c.mae is none %}
               <td class="miss">—</td>
             {% else %}
-              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c.best else '' }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ "%.2f"|format(c.mae) }}</td>
+              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c.best_mae else '' }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ "%.2f"|format(c.mae) }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Tagesfehler je Team [RMSE]</h2>
+    <p class="meta">
+      RMSE [MW] pro Zieltag. <b>Fett</b> markiert den besten Wert des Tages
+      (Spaltenminimum). Werte in <span class="locf">grau</span> kennzeichnen
+      eine via LOCF fortgeschriebene Prognose (keine frische Submission für
+      diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
+      Forecast vorlag.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Team</th>
+          {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for team in daily.teams %}
+        <tr>
+          <td>{{ team.display_name }}</td>
+          {% for c in team.cells %}
+            {% if c.rmse is none %}
+              <td class="miss">—</td>
+            {% else %}
+              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c.best_rmse else '' }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ "%.2f"|format(c.rmse) }}</td>
             {% endif %}
           {% endfor %}
         </tr>

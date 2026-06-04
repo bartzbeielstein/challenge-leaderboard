@@ -212,34 +212,56 @@ def fig_forecast_vs_actual(
 
 
 # --------------------------------------------------------------------------
-# Chart 2: Mittlere MAE je Team (horizontales Balkendiagramm)
+# Chart 2: Mittlere MAE/RMSE je Team (horizontale Balkendiagramme)
 # --------------------------------------------------------------------------
+
+def _fig_mean_metric_bar(
+    board: pd.DataFrame, *, column: str, metric_label: str, title: str
+) -> go.Figure | None:
+    """Horizontale Balken eines Mittelwerts je Team (bester oben, grün=gut)."""
+    if board is None or board.empty or column not in board.columns:
+        return None
+    # Aufsteigend nach der jeweiligen Metrik sortieren (bester zuerst) —
+    # das Board selbst bleibt nach mean_mae gerankt. kind="stable", damit
+    # Gleichstände die Board-Reihenfolge behalten (Determinismus, CR-2).
+    b = board.sort_values(column, ascending=True, na_position="last",
+                          kind="stable")
+    names = b["display_name"].tolist()
+    vals = b[column].astype(float).tolist()
+    fig = go.Figure(go.Bar(
+        x=vals, y=names, orientation="h",
+        text=[f"{v:.0f}" for v in vals], textposition="auto",
+        marker=dict(
+            color=vals, colorscale="RdYlGn", reversescale=True,
+            line=dict(color="rgba(0,0,0,0.08)", width=1),
+            showscale=False,
+        ),
+        hovertemplate=("%{y}<br>Ø " + metric_label
+                       + " = %{x:.1f} MW<extra></extra>"),
+    ))
+    # Aufsteigend sortiert (bester zuerst) → reversed, damit der beste
+    # Balken oben steht.
+    fig.update_yaxes(autorange="reversed")
+    _base_layout(fig, title=title, yaxis_title="")
+    fig.update_layout(showlegend=False, hovermode="closest",
+                      xaxis_title=f"Ø {metric_label} [MW]")
+    return fig
+
 
 def fig_mean_mae_bar(
     board: pd.DataFrame, *, div_id: str = "fig-leaderboard"
 ) -> go.Figure | None:
     """Horizontale Balken der mittleren MAE je Team (Rang 1 oben, grün=gut)."""
-    if board is None or board.empty:
-        return None
-    names = board["display_name"].tolist()
-    mae = board["mean_mae"].astype(float).tolist()
-    fig = go.Figure(go.Bar(
-        x=mae, y=names, orientation="h",
-        text=[f"{v:.0f}" for v in mae], textposition="auto",
-        marker=dict(
-            color=mae, colorscale="RdYlGn", reversescale=True,
-            line=dict(color="rgba(0,0,0,0.08)", width=1),
-            showscale=False,
-        ),
-        hovertemplate="%{y}<br>Ø MAE = %{x:.1f} MW<extra></extra>",
-    ))
-    # board ist aufsteigend nach mean_mae (Rang 1 zuerst) → reversed, damit
-    # der beste Balken oben steht.
-    fig.update_yaxes(autorange="reversed")
-    _base_layout(fig, title="Mittlere MAE je Team", yaxis_title="")
-    fig.update_layout(showlegend=False, hovermode="closest",
-                      xaxis_title="Ø MAE [MW]")
-    return fig
+    return _fig_mean_metric_bar(board, column="mean_mae", metric_label="MAE",
+                                title="Mittlere MAE je Team")
+
+
+def fig_mean_rmse_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-rmse"
+) -> go.Figure | None:
+    """Horizontale Balken der mittleren RMSE je Team (beste oben, grün=gut)."""
+    return _fig_mean_metric_bar(board, column="mean_rmse", metric_label="RMSE",
+                                title="Mittlerer RMSE je Team")
 
 
 # --------------------------------------------------------------------------

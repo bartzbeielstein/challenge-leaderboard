@@ -53,12 +53,14 @@ def load_pseudo_ids() -> set[str]:
 def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     if scores.empty:
         return pd.DataFrame(columns=[
-            "team_id", "display_name", "mean_mae", "sum_mae", "n_submissions",
+            "team_id", "display_name", "mean_mae", "mean_rmse", "n_submissions",
         ])
-    sum_mae = scores.groupby("team_id")["mae"].sum().rename("sum_mae")
     mean_mae = scores.groupby("team_id")["mae"].mean().rename("mean_mae")
+    # Mittlere RMSE analog zur mittleren MAE: Mittel der Tages-RMSEs.
+    # Sekundärmetrik (Anzeige) — das Ranking bleibt bei mean_mae.
+    mean_rmse = scores.groupby("team_id")["rmse"].mean().rename("mean_rmse")
     n = scores.groupby("team_id").size().rename("n_submissions")
-    out = pd.concat([mean_mae, sum_mae, n], axis=1).reset_index()
+    out = pd.concat([mean_mae, mean_rmse, n], axis=1).reset_index()
     out["display_name"] = out["team_id"].map(names).fillna(out["team_id"])
     out = out.sort_values(
         ["mean_mae", "n_submissions"],
@@ -77,9 +79,9 @@ def daily_breakdown(
     ``rank_order`` fixes the row order to match the main leaderboard; dates
     are sorted ascending so the most recent column is rightmost. Cells for
     a (team, date) pair without a score are returned as None — the template
-    renders them as a dash. Pro Spalte (Zieltag) markiert ``best: True``
-    die kleinste MAE (Tagesbester, im Template fett); bei Gleichstand alle
-    betroffenen Zellen.
+    renders them as a dash. Pro Spalte (Zieltag) markieren ``best_mae`` /
+    ``best_rmse`` die jeweils kleinste MAE bzw. RMSE (Tagesbester, im
+    Template fett); bei Gleichstand alle betroffenen Zellen.
     """
     if scores.empty:
         return {"dates": [], "teams": []}
@@ -95,14 +97,16 @@ def daily_breakdown(
             r = lookup.get((team_id, d))
             if r is None:
                 cells.append({"mae": None, "rmse": None, "mape": None,
-                              "carried": False, "best": False})
+                              "carried": False,
+                              "best_mae": False, "best_rmse": False})
             else:
                 cells.append({
                     "mae": round(float(r["mae"]), 2),
                     "rmse": round(float(r["rmse"]), 2),
                     "mape": round(float(r["mape"]), 2),
                     "carried": bool(r.get("carried_forward", False)),
-                    "best": False,
+                    "best_mae": False,
+                    "best_rmse": False,
                 })
         teams.append({
             "team_id": team_id,
@@ -110,16 +114,18 @@ def daily_breakdown(
             "cells": cells,
         })
 
-    # Tagesbester je Spalte: kleinste (gerundete) MAE über alle Teams.
-    for j in range(len(dates)):
-        col = [t["cells"][j]["mae"] for t in teams
-               if t["cells"][j]["mae"] is not None]
-        if not col:
-            continue
-        best = min(col)
-        for t in teams:
-            c = t["cells"][j]
-            c["best"] = c["mae"] is not None and c["mae"] == best
+    # Tagesbester je Spalte und Metrik: kleinster (gerundeter) Wert über
+    # alle Teams.
+    for metric, flag in (("mae", "best_mae"), ("rmse", "best_rmse")):
+        for j in range(len(dates)):
+            col = [t["cells"][j][metric] for t in teams
+                   if t["cells"][j][metric] is not None]
+            if not col:
+                continue
+            best = min(col)
+            for t in teams:
+                c = t["cells"][j]
+                c[flag] = c[metric] is not None and c[metric] == best
 
     return {"dates": dates, "teams": teams}
 
@@ -200,6 +206,9 @@ def build_figures(
         "leaderboard": charts.fig_to_html(
             charts.fig_mean_mae_bar(board, div_id="fig-leaderboard"),
             "fig-leaderboard"),
+        "leaderboard_rmse": charts.fig_to_html(
+            charts.fig_mean_rmse_bar(board, div_id="fig-leaderboard-rmse"),
+            "fig-leaderboard-rmse"),
         "mae_time": charts.fig_to_html(
             charts.fig_mae_over_time(scores, names, div_id="fig-mae-time"),
             "fig-mae-time"),
