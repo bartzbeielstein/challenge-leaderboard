@@ -61,23 +61,23 @@
     td.locf { color: #9aa1ab; }
     td.miss { color: #d0d4da; text-align: right; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
-    /* Kalender-Datumswahl fürs Forecast-Chart — im Dokumentfluss,
-       überlappt den Plot nie. */
-    .cal-wrap { margin: 0 0 1rem; }
-    .cal-toggle {
-      display: inline-flex; align-items: center; gap: .45rem;
-      font: inherit; font-weight: 600; color: var(--accent);
-      background: var(--accent-soft); border: 1px solid var(--line);
-      border-radius: 999px; padding: .4rem .95rem; cursor: pointer;
-    }
-    .cal-toggle:hover { border-color: var(--accent); }
+    /* Kalender-Datumswahl fürs Forecast-Chart — permanent geöffnet,
+       rechts neben dem Plot (auf schmalen Screens darunter umbrechend);
+       eigener Flex-Bereich, überlappt den Plot nie. */
+    .fig-cal-row { display: flex; align-items: flex-start; gap: 1.1rem;
+                   flex-wrap: wrap; }
+    .fig-cal-plot { flex: 1 1 480px; min-width: 0; }
+    .cal-wrap { flex: 0 0 auto; }
     .cal {
-      display: none; margin-top: .6rem; padding: .8rem .9rem;
-      width: max-content; background: var(--card);
-      border: 1px solid var(--line); border-radius: 12px;
-      box-shadow: var(--shadow);
+      padding: .8rem .9rem; width: max-content;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: var(--shadow);
     }
-    .cal.open { display: block; }
+    .cal-sel {
+      margin: 0 0 .6rem; padding: .35rem .6rem; text-align: center;
+      font-weight: 600; font-size: .9rem; color: var(--accent);
+      background: var(--accent-soft); border-radius: 8px;
+    }
     .cal-head { display: flex; align-items: center; justify-content: space-between;
                 gap: .5rem; margin-bottom: .55rem; }
     .cal-title { font-weight: 600; font-size: .95rem; min-width: 9.5rem;
@@ -166,25 +166,22 @@
       ENTSO-E-Day-ahead-Prognose als Referenz-Baseline. Zieltag über den
       Kalender wählbar.
     </p>
-    <div class="cal-wrap" id="cal-forecast" hidden>
-      <button type="button" class="cal-toggle" id="cal-forecast-toggle"
-              aria-expanded="false" aria-controls="cal-forecast-panel">
-        <span aria-hidden="true">📅</span>
-        <span>Zieltag: <span id="cal-forecast-sel"></span></span>
-        <span aria-hidden="true">▾</span>
-      </button>
-      <div class="cal" id="cal-forecast-panel" role="dialog" aria-label="Zieltag wählen">
-        <div class="cal-head">
-          <button type="button" class="cal-nav" id="cal-forecast-prev"
-                  aria-label="Voriger Monat">‹</button>
-          <span class="cal-title" id="cal-forecast-title"></span>
-          <button type="button" class="cal-nav" id="cal-forecast-next"
-                  aria-label="Nächster Monat">›</button>
+    <div class="fig-cal-row">
+      <div class="fig-cal-plot">{{ figs.forecast | safe }}</div>
+      <div class="cal-wrap" id="cal-forecast" hidden>
+        <div class="cal" id="cal-forecast-panel" role="group" aria-label="Zieltag wählen">
+          <p class="cal-sel">Zieltag: <span id="cal-forecast-sel"></span></p>
+          <div class="cal-head">
+            <button type="button" class="cal-nav" id="cal-forecast-prev"
+                    aria-label="Voriger Monat">‹</button>
+            <span class="cal-title" id="cal-forecast-title"></span>
+            <button type="button" class="cal-nav" id="cal-forecast-next"
+                    aria-label="Nächster Monat">›</button>
+          </div>
+          <div class="cal-grid" id="cal-forecast-grid"></div>
         </div>
-        <div class="cal-grid" id="cal-forecast-grid"></div>
       </div>
     </div>
-    {{ figs.forecast | safe }}
     <script>
     (function () {
       "use strict";
@@ -204,8 +201,6 @@
         if (days.length < 2) { return; }  // nichts zu wählen
 
         var wrap = document.getElementById("cal-forecast");
-        var toggle = document.getElementById("cal-forecast-toggle");
-        var panel = document.getElementById("cal-forecast-panel");
         var selLabel = document.getElementById("cal-forecast-sel");
         var title = document.getElementById("cal-forecast-title");
         var grid = document.getElementById("cal-forecast-grid");
@@ -231,8 +226,6 @@
           Plotly.update(gd, { visible: vis },
                         { "title.text": meta.titlePrefix + " — " + d });
           selLabel.textContent = d;
-          panel.classList.remove("open");
-          toggle.setAttribute("aria-expanded", "false");
           renderGrid();
         }
 
@@ -278,14 +271,14 @@
 
         prev.addEventListener("click", shiftMonth.bind(null, -1));
         next.addEventListener("click", shiftMonth.bind(null, 1));
-        toggle.addEventListener("click", function () {
-          var open = panel.classList.toggle("open");
-          toggle.setAttribute("aria-expanded", String(open));
-        });
 
         selLabel.textContent = selected;
         renderGrid();
         wrap.hidden = false;
+        // Der Plot wurde in voller Kartenbreite gerendert, bevor der
+        // Kalender eingeblendet wurde — auf die schmalere Flex-Spalte
+        // nachjustieren (responsive greift sonst erst beim Window-Resize).
+        Plotly.Plots.resize(gd);
       }
 
       init();
