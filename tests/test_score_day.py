@@ -86,6 +86,24 @@ def test_score_submission_zero_error_is_zero_mae():
     assert out["mae"] == 0
     assert out["rmse"] == 0
     assert out["mape"] == 0
+    assert out["bias"] == 0
+    assert out["upr"] == 0      # Prognose nie unter Ist
+
+
+def test_score_submission_bias_and_upr_signed():
+    actual = pd.Series([1000.0] * 24,
+                        index=pd.date_range("2026-05-26", periods=24, freq="h"))
+    # Konstante Unterprognose um 50 MW: Bias negativ, UPR 100 %.
+    out = sd.score_submission(np.array([950.0] * 24), actual)
+    assert out["bias"] == -50.0
+    assert out["upr"] == 100.0
+    assert out["mae"] == 50.0   # MAE bleibt vorzeichenblind
+    # Gemischt: 12h +100 (über), 12h -100 (unter) -> Bias 0, UPR 50, MAE 100.
+    mixed = np.array([1100.0] * 12 + [900.0] * 12)
+    out = sd.score_submission(mixed, actual)
+    assert out["bias"] == 0.0
+    assert out["upr"] == 50.0
+    assert out["mae"] == 100.0
 
 
 def test_collect_forecasts_exact_match(write_submission, teams_yml_file):

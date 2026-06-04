@@ -53,14 +53,25 @@ def load_pseudo_ids() -> set[str]:
 def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     if scores.empty:
         return pd.DataFrame(columns=[
-            "team_id", "display_name", "mean_mae", "mean_rmse", "n_submissions",
+            "team_id", "display_name", "mean_mae", "mean_rmse", "mean_mape",
+            "mean_bias", "mean_upr", "n_submissions",
         ])
-    mean_mae = scores.groupby("team_id")["mae"].mean().rename("mean_mae")
-    # Mittlere RMSE analog zur mittleren MAE: Mittel der Tages-RMSEs.
-    # Sekundärmetrik (Anzeige) — das Ranking bleibt bei mean_mae.
-    mean_rmse = scores.groupby("team_id")["rmse"].mean().rename("mean_rmse")
-    n = scores.groupby("team_id").size().rename("n_submissions")
-    out = pd.concat([mean_mae, mean_rmse, n], axis=1).reset_index()
+    g = scores.groupby("team_id")
+    mean_mae = g["mae"].mean().rename("mean_mae")
+    # Sekundärmetriken (Anzeige) — das Ranking bleibt bei mean_mae.
+    # Jeweils Mittel der Tageswerte, analog zur mittleren MAE:
+    #   RMSE  — quadratische Fehlergröße (bestraft Ausreißer/Peaks stärker)
+    #   MAPE  — De-facto-Referenzmetrik der Lastprognose-Praxis
+    #   Bias  — Ø(Prognose − Ist), signiert; negativ = Unterprognose
+    #   UPR   — Anteil Stunden mit Prognose < Ist [%]
+    # (vgl. Möbius et al. 2023, arXiv:2302.11017)
+    mean_rmse = g["rmse"].mean().rename("mean_rmse")
+    mean_mape = g["mape"].mean().rename("mean_mape")
+    mean_bias = g["bias"].mean().rename("mean_bias")
+    mean_upr = g["upr"].mean().rename("mean_upr")
+    n = g.size().rename("n_submissions")
+    out = pd.concat([mean_mae, mean_rmse, mean_mape, mean_bias, mean_upr, n],
+                    axis=1).reset_index()
     out["display_name"] = out["team_id"].map(names).fillna(out["team_id"])
     out = out.sort_values(
         ["mean_mae", "n_submissions"],
@@ -173,6 +184,9 @@ def entsoe_pseudo_scores(
             "rmse": round(float(np.sqrt(np.mean(err ** 2))), 4),
             "mape": round(float(np.mean(np.abs(err[nz] / actual[nz])) * 100), 4)
                     if nz.any() else float("nan"),
+            # Bias/UPR wie in score_day.score_submission (err = Prognose−Ist).
+            "bias": round(float(np.mean(err)), 4),
+            "upr": round(float(np.mean(err < 0) * 100), 4),
             "carried_forward": False,
             "source_date": d,
         })

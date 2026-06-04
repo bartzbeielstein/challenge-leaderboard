@@ -25,6 +25,12 @@ def isolate_paths(monkeypatch, tmp_path, repo_root):
 
 def _seed(tmp_path: Path, rows):
     df = pd.DataFrame(rows)
+    # Score-Zeilen führen seit den Bias/UPR-Spalten beide Metriken; Fixtures
+    # ohne explizite Werte bekommen neutrale Defaults.
+    if "bias" not in df.columns:
+        df["bias"] = 0.0
+    if "upr" not in df.columns:
+        df["upr"] = 50.0
     df.to_parquet(tmp_path / "data" / "scores.parquet", index=False)
 
 
@@ -43,18 +49,25 @@ def _seed_teams(tmp_path: Path):
 def test_aggregate_ranks_by_mean_mae_then_n_submissions_desc(tmp_path):
     _seed_teams(tmp_path)
     scores = pd.DataFrame([
-        {"team_id": "team_4", "mae": 1000.0, "rmse": 1200.0},
-        {"team_id": "team_4", "mae": 3000.0, "rmse": 3400.0},  # mean 2000, n=2
-        {"team_id": "hot_rod", "mae": 2000.0, "rmse": 2500.0},  # mean 2000, n=1
-        {"team_id": "neura", "mae": 500.0, "rmse": 700.0},      # mean 500, n=1
+        {"team_id": "team_4", "mae": 1000.0, "rmse": 1200.0, "mape": 2.0,
+         "bias": -500.0, "upr": 60.0},
+        {"team_id": "team_4", "mae": 3000.0, "rmse": 3400.0, "mape": 6.0,
+         "bias": 1500.0, "upr": 40.0},   # mean 2000, n=2
+        {"team_id": "hot_rod", "mae": 2000.0, "rmse": 2500.0, "mape": 4.0,
+         "bias": -2000.0, "upr": 100.0},  # mean 2000, n=1
+        {"team_id": "neura", "mae": 500.0, "rmse": 700.0, "mape": 1.0,
+         "bias": 0.0, "upr": 50.0},       # mean 500, n=1
     ])
     names = bl.load_teams()
     out = bl.aggregate(scores, names)
     assert list(out["team_id"]) == ["neura", "team_4", "hot_rod"]
     # tie at 2000 -> more submissions ranks higher
     assert list(out["rank"]) == [1, 2, 3]
-    # mean_rmse analog zur mean_mae: Mittel der Tages-RMSEs.
+    # Sekundärmetriken: jeweils Mittel der Tageswerte (Bias signiert!).
     assert list(out["mean_rmse"]) == [700.0, 2300.0, 2500.0]
+    assert list(out["mean_mape"]) == [1.0, 4.0, 4.0]
+    assert list(out["mean_bias"]) == [0.0, 500.0, -2000.0]
+    assert list(out["mean_upr"]) == [50.0, 50.0, 100.0]
 
 
 def test_main_writes_html_and_json(tmp_path):
@@ -70,6 +83,10 @@ def test_main_writes_html_and_json(tmp_path):
     assert "Team 4" in html
     assert "Hot Rod" in html
     assert "Mean RMSE [MW]" in html
+    assert "Mean MAPE [%]" in html
+    assert "Mean Bias [MW]" in html
+    assert "UPR [%]" in html
+    assert "arxiv.org/abs/2302.11017" in html   # Referenz Möbius et al. 2023
     assert "Sum MAE" not in html
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert [r["team_id"] for r in data] == ["team_4", "hot_rod"]
@@ -266,6 +283,9 @@ def test_entsoe_pseudo_scores_computes_mae():
     assert list(out["team_id"]) == ["entsoe"]
     assert out["target_date"].iloc[0] == "2026-05-26"
     assert out["mae"].iloc[0] == 100.0          # |1100 - 1000|
+    # Bias/UPR wie bei den Teams: konstante Überprognose von +100 MW.
+    assert out["bias"].iloc[0] == 100.0
+    assert out["upr"].iloc[0] == 0.0
     assert not bool(out["carried_forward"].iloc[0])
 
 

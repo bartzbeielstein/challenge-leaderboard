@@ -72,6 +72,17 @@ Nur Personen aus `github_handles` dürfen PRs für dieses Team mergen
   die jeweils letzte vorhandene Submission des Teams fortgeschrieben
   (last observation carried forward) und zählt als bewerteter Tag.
 - *Tie-Break*: Anzahl bewerteter Tage (absteigend).
+- *Sekundärmetriken (Anzeige, kein Ranking)*: mittlere RMSE, mittlere
+  MAPE (De-facto-Referenzmetrik der Lastprognose-Praxis, vgl. Hong,
+  Pinson & Fan 2016, IJF), **Mean Bias** = Ø(Prognose − Ist) (signiert;
+  negativ = systematische Unterprognose) und **UPR** (Under-Prediction
+  Rate) = Anteil der Stunden mit Prognose < Ist. Bias/UPR machen die im
+  Netzbetrieb teurere Unterprognose-Richtung sichtbar, die
+  vorzeichenblinde Metriken verbergen — die offiziellen
+  ENTSO-E-Day-ahead-Lastprognosen sind nachweislich systematisch
+  verzerrt: Möbius, Watermeyer, Grothe & Müsgens (2023), *Enhancing
+  Energy System Models Using Better Load Forecasts*,
+  [arXiv:2302.11017](https://arxiv.org/abs/2302.11017).
 
 ### Pseudo-Team ENTSO-E
 

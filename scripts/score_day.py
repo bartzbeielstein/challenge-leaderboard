@@ -204,7 +204,16 @@ def score_submission(forecast_values: np.ndarray, actual: pd.Series) -> dict:
     nonzero = actual.values != 0
     mape = float(np.mean(np.abs(err[nonzero] / actual.values[nonzero])) * 100) \
         if nonzero.any() else float("nan")
-    return {"mae": round(mae, 4), "rmse": round(rmse, 4), "mape": round(mape, 4)}
+    # Bias = Ø(Prognose − Ist): signiert, negativ = systematische
+    # Unterprognose — die Richtung, die vorzeichenblinde Metriken
+    # (MAE/RMSE/MAPE) nicht zeigen und die im Netzbetrieb teurer ist
+    # (vgl. Möbius et al. 2023, arXiv:2302.11017).
+    bias = float(np.mean(err))
+    # UPR (Under-Prediction Rate) = Anteil der Stunden mit Prognose < Ist.
+    upr = float(np.mean(err < 0) * 100)
+    return {"mae": round(mae, 4), "rmse": round(rmse, 4),
+            "mape": round(mape, 4), "bias": round(bias, 4),
+            "upr": round(upr, 4)}
 
 
 def load_team_ids() -> list[str]:

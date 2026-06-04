@@ -140,6 +140,9 @@
           <th>#</th><th>Team</th>
           <th class="num">Mean MAE [MW]</th>
           <th class="num">Mean RMSE [MW]</th>
+          <th class="num">Mean MAPE [%]</th>
+          <th class="num" title="Ø(Prognose − Ist); negativ = systematische Unterprognose">Mean Bias [MW]</th>
+          <th class="num" title="Under-Prediction Rate: Anteil Stunden mit Prognose < Ist">UPR [%]</th>
           <th class="num">Bewertete Tage</th>
         </tr>
       </thead>
@@ -150,11 +153,25 @@
           <td>{{ row.display_name }}</td>
           <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
           <td class="num">{{ "%.2f"|format(row.mean_rmse) }}</td>
+          <td class="num">{{ "%.2f"|format(row.mean_mape) }}</td>
+          <td class="num">{{ "%.2f"|format(row.mean_bias) }}</td>
+          <td class="num">{{ "%.1f"|format(row.mean_upr) }}</td>
           <td class="num">{{ row.n_submissions }}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
+    <p class="meta">
+      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Bias</b> =
+      Ø(Prognose − Ist), negativ = systematische Unterprognose; <b>UPR</b> =
+      Anteil der Stunden mit Prognose &lt; Ist. Beides macht die im
+      Netzbetrieb teurere Unterprognose-Richtung sichtbar, die
+      vorzeichenblinde Metriken (MAE/RMSE/MAPE) verbergen — die offiziellen
+      ENTSO-E-Day-ahead-Lastprognosen sind nachweislich systematisch
+      verzerrt, vgl. <a href="https://arxiv.org/abs/2302.11017">Möbius
+      et&nbsp;al. (2023), „Enhancing Energy System Models Using Better Load
+      Forecasts", arXiv:2302.11017</a>.
+    </p>
     {% else %}
       <p class="empty">Noch keine bewerteten Submissions.</p>
     {% endif %}
