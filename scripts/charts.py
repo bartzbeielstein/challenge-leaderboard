@@ -158,9 +158,14 @@ def fig_forecast_vs_actual(
         idx += 1
         # ENTSO-E Day-ahead-Forecast als gestrichelte Referenzlinie (figure.py-
         # Stil: eigene Spur mit MAE in der Legende). Nur wenn vorhanden.
+        # MAE bevorzugt aus den Scores (Pseudo-Team ``entsoe``), damit
+        # Figur-Label und Leaderboard-Tabelle dieselbe Zahl zeigen;
+        # Fallback: inline aus den Tagesdaten.
         if "entsoe_forecast_mw" in a.columns and a["entsoe_forecast_mw"].notna().any():
             fc = a["entsoe_forecast_mw"]
-            mae = (fc - a["load_mw"]).abs().mean()
+            mae = mae_lookup.get(("entsoe", d))
+            if mae is None:
+                mae = (fc - a["load_mw"]).abs().mean()
             label = ("ENTSO-E Prognose"
                      + (f" · MAE {mae:.0f}" if pd.notna(mae) else ""))
             fig.add_trace(go.Scatter(

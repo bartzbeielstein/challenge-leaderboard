@@ -74,6 +74,7 @@ def teams_yml_file(tmp_path):
             {"id": "team_4", "display_name": "Team 4", "github_handles": ["a"]},
             {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": ["b"]},
             {"id": "ghost", "display_name": "Ghost", "github_handles": ["c"]},
+            {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
         ]
     }))
 
@@ -117,6 +118,18 @@ def test_collect_forecasts_ignores_future_dates(write_submission, teams_yml_file
     # the bug after LOCF would be picking up a *future* submission).
     write_submission("team_4", "2026-05-27")
     assert sd.collect_forecasts("2026-05-26", ["team_4"]) == []
+
+
+def test_pseudo_team_never_scored_even_with_submission_dir(
+    write_submission, teams_yml_file
+):
+    # Pseudo teams (entsoe) are excluded from the registry the daily scoring
+    # iterates — even a stray submissions/<id>/ dir must not get them scored
+    # (otherwise LOCF would silently carry old CSVs forward forever).
+    write_submission("entsoe", "2026-05-26")
+    assert "entsoe" not in sd.load_team_ids()
+    forecasts = sd.collect_forecasts("2026-05-26", sd.load_team_ids())
+    assert all(t != "entsoe" for t, _, _ in forecasts)
 
 
 def test_main_writes_parquet_with_expected_rows(

@@ -360,6 +360,13 @@ gemessenen Netz-Ist-Load (*Actual Total Load* 6.1.A). Die **Ist-Last-Spur**
 stammt aus `data/actual_load.parquet` — einer **committeten** Zeitreihe,
 die der Pages-Build (`build_leaderboard.py`) **ohne API-Key** liest.
 
+Aus derselben Datei (Spalte `entsoe_forecast_mw`) leitet der Build auch
+die Scores des **Pseudo-Teams `entsoe`** ab (teams.yml: `pseudo: true`):
+es nimmt in allen Tabellen/Figuren am Ranking teil, exakt über den
+Zeitraum der regulären Teams, reicht aber keine CSVs ein —
+`validate_submission.py` lehnt Submissions für Pseudo-Teams ab,
+`score_day.py` schließt sie vom täglichen Scoring aus.
+
 **Seit 2026-06-04 vollautomatisch:** Der `Daily Scoring`-Workflow
 (`score-daily.yml`) führt nach dem Scoring zusätzlich
 `scripts/fetch_actuals.py --to <Zieltag>` aus (er hat den

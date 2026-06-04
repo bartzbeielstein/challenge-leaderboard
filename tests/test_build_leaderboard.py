@@ -35,7 +35,7 @@ def _seed_teams(tmp_path: Path):
             {"id": "team_4", "display_name": "Team 4", "github_handles": []},
             {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": []},
             {"id": "neura", "display_name": "Team Neura", "github_handles": []},
-            {"id": "entsoe", "display_name": "Entso-E", "github_handles": []},
+            {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
         ]
     }))
 
@@ -214,7 +214,7 @@ def test_main_omits_logo_when_absent(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# ENTSO-E day-ahead forecast as a ranked leaderboard baseline.
+# ENTSO-E day-ahead forecast as the ranked pseudo-team `entsoe`.
 # --------------------------------------------------------------------------
 
 def _actuals_frame(date: str = "2026-05-26", with_forecast: bool = True,
@@ -229,36 +229,64 @@ def _actuals_frame(date: str = "2026-05-26", with_forecast: bool = True,
     return pd.DataFrame(data)
 
 
-def test_entsoe_baseline_scores_computes_mae():
-    out = bl.entsoe_baseline_scores(_actuals_frame("2026-05-26"), pd.DataFrame())
+def test_entsoe_pseudo_scores_computes_mae():
+    out = bl.entsoe_pseudo_scores(_actuals_frame("2026-05-26"), {"2026-05-26"})
     assert list(out["team_id"]) == ["entsoe"]
     assert out["target_date"].iloc[0] == "2026-05-26"
     assert out["mae"].iloc[0] == 100.0          # |1100 - 1000|
     assert not bool(out["carried_forward"].iloc[0])
 
 
-def test_entsoe_baseline_none_without_forecast_column():
+def test_entsoe_pseudo_none_without_forecast_column():
     df = _actuals_frame("2026-05-26", with_forecast=False)
-    assert bl.entsoe_baseline_scores(df, pd.DataFrame()).empty
+    assert bl.entsoe_pseudo_scores(df, {"2026-05-26"}).empty
 
 
-def test_entsoe_baseline_none_when_actuals_missing():
-    assert bl.entsoe_baseline_scores(None, pd.DataFrame()).empty
+def test_entsoe_pseudo_none_when_actuals_missing():
+    assert bl.entsoe_pseudo_scores(None, {"2026-05-26"}).empty
 
 
-def test_entsoe_baseline_requires_full_day():
+def test_entsoe_pseudo_omits_incomplete_scored_day(capsys):
     df = _actuals_frame("2026-05-26", hours=10)   # partial day
-    assert bl.entsoe_baseline_scores(df, pd.DataFrame()).empty
+    assert bl.entsoe_pseudo_scores(df, {"2026-05-26"}).empty
+    assert "übersprungen" in capsys.readouterr().out   # logged, not silent
 
 
-def test_entsoe_baseline_skips_already_scored_day():
-    # A real entsoe score in scores.parquet takes precedence over the baseline.
-    existing = pd.DataFrame([{"team_id": "entsoe", "target_date": "2026-05-26",
-                              "mae": 42.0}])
-    assert bl.entsoe_baseline_scores(_actuals_frame("2026-05-26"), existing).empty
+def test_entsoe_pseudo_restricted_to_scored_dates():
+    # Sync rule: actuals carry TWO complete days, but only one is a scored
+    # target_date of the regular teams -> entsoe gets exactly that one day.
+    df = pd.concat([_actuals_frame("2026-05-26"), _actuals_frame("2026-05-27")],
+                   ignore_index=True)
+    out = bl.entsoe_pseudo_scores(df, {"2026-05-26"})
+    assert list(out["target_date"]) == ["2026-05-26"]
 
 
-def test_main_ranks_entsoe_baseline_in_leaderboard(tmp_path):
+def test_load_pseudo_ids_reads_flag(tmp_path):
+    _seed_teams(tmp_path)
+    assert bl.load_pseudo_ids() == {"entsoe"}
+
+
+def test_entsoe_pseudo_authoritative_overrides_parquet(tmp_path):
+    # A persisted entsoe row in scores.parquet (e.g. from a historic CSV
+    # submission) must be IGNORED — the derived value wins.
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "entsoe", "target_date": "2026-05-26", "mae": 42.0,
+         "rmse": 42.0, "mape": 0.04, "carried_forward": True},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")        # forecast = load-10 -> MAE 10
+    bl.main()
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    entsoe = next(r for r in data if r["team_id"] == "entsoe")
+    assert float(entsoe["mean_mae"]) == 10.0      # derived, not the stale 42
+    daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
+    cell = next(t for t in daily["teams"] if t["team_id"] == "entsoe")["cells"][0]
+    assert cell["carried"] is False               # never LOCF for the pseudo-team
+
+
+def test_main_ranks_entsoe_pseudo_in_leaderboard(tmp_path):
     _seed_teams(tmp_path)
     _seed(tmp_path, [
         {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
@@ -268,4 +296,4 @@ def test_main_ranks_entsoe_baseline_in_leaderboard(tmp_path):
     bl.main()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert "entsoe" in [r["team_id"] for r in data]
-    assert "Entso-E" in [r["display_name"] for r in data]
+    assert "ENTSO-E" in [r["display_name"] for r in data]

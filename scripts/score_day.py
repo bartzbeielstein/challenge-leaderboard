@@ -208,8 +208,19 @@ def score_submission(forecast_values: np.ndarray, actual: pd.Series) -> dict:
 
 
 def load_team_ids() -> list[str]:
+    """Team-Ids aus teams.yml — ohne Pseudo-Teams.
+
+    Pseudo-Teams (``pseudo: true``, z. B. ``entsoe``) submitten keine CSVs;
+    ihre Scores leitet ``build_leaderboard.py`` zur Build-Zeit direkt aus
+    den ENTSO-E-Daten ab. Sie hier auszuschließen verhindert auch, dass
+    ein versehentlich wieder angelegtes ``submissions/<id>/``-Verzeichnis
+    per LOCF gescort würde.
+    """
     data = yaml.safe_load(TEAMS_PATH.read_text()) or {}
-    return sorted(t["id"] for t in (data.get("teams") or []))
+    return sorted(
+        t["id"] for t in (data.get("teams") or [])
+        if not t.get("pseudo", False)
+    )
 
 
 def collect_forecasts(

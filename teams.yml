@@ -4,11 +4,15 @@
 #     - id: <filename-safe, lowercase>     # erscheint im Pfad submissions/<id>/...
 #       display_name: <freier String>      # erscheint im Leaderboard
 #       github_handles: [<gh-handle>, ...] # darf PRs mergen
+#       pseudo: true                       # optional: Pseudo-Team ohne CSV-
+#                                          # Submissions; Scores werden zur
+#                                          # Build-Zeit direkt aus den
+#                                          # ENTSO-E-Daten abgeleitet
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
 # Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
 # github_handles, display_name mit Zusatz "(ENTSO-E)"). Ausgenommen ist der
-# eigenständige ENTSO-E-Baseline-Eintrag `entsoe`.
+# eigenständige ENTSO-E-Pseudo-Eintrag `entsoe`.
 teams:
   - id: a_team
     display_name: "Das A Team"
@@ -40,9 +44,12 @@ teams:
   - id: team_4_optuna_entsoe
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
+  # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
+  # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
+  # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
   - id: entsoe
-    display_name: "Entso-E"
-    github_handles: [bartzbeielstein]
+    display_name: "ENTSO-E"
+    pseudo: true
   - id: neura
     display_name: "Team Neura"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]

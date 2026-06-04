@@ -73,6 +73,19 @@ Nur Personen aus `github_handles` dürfen PRs für dieses Team mergen
   (last observation carried forward) und zählt als bewerteter Tag.
 - *Tie-Break*: Anzahl bewerteter Tage (absteigend).
 
+### Pseudo-Team ENTSO-E
+
+Die offizielle ENTSO-E-Day-ahead-Prognose nimmt als **Pseudo-Team**
+`entsoe` (teams.yml: `pseudo: true`) am Ranking teil — in allen Tabellen
+und Figuren. Seine Scores werden **nicht** über `submissions/`-CSVs
+eingereicht, sondern zur Build-Zeit direkt aus den committeten
+ENTSO-E-Daten abgeleitet (`data/actual_load.parquet`, Spalte
+`entsoe_forecast_mw` → `entsoe_pseudo_scores()` in
+`scripts/build_leaderboard.py`). Bewertet wird exakt der Zeitraum der
+regulären Teams (erster bis letzter gescorter Zieltag, synchron); CSV-
+Submissions für Pseudo-Teams lehnt `validate_submission.py` ab, und
+`score_day.py` schließt sie vom täglichen Scoring aus.
+
 Details und die Formeln in `lecture/12_challenge.qmd` (§
 "Bewertungsmethodik im Detail").
 
@@ -82,9 +95,9 @@ Zusätzlich zu den Tabellen rendert `scripts/build_leaderboard.py`
 interaktive Plotly-Diagramme auf der GitHub-Pages-Seite (Figuren in
 `scripts/charts.py`):
 
-- **Prognose vs. Ist-Last** — pro Zieltag (Dropdown oben rechts) die
-  24-h-Prognose jedes Teams gegen die gemessene DE-Netzlast (ENTSO-E
-  *Actual Total Load*), MAE je Team in der Legende.
+- **Prognose vs. Ist-Last** — pro Zieltag (Kalender rechts neben dem
+  Plot) die 24-h-Prognose jedes Teams gegen die gemessene DE-Netzlast
+  (ENTSO-E *Actual Total Load*), MAE je Team in der Legende.
 - **Mittlere MAE je Team** — horizontales Balkendiagramm (grün = gut → rot).
 - **MAE-Verlauf** — Tages-MAE je Team über die Zeit; offene Marker
   kennzeichnen via LOCF fortgeschriebene Tage.
@@ -96,10 +109,15 @@ committete Dateien.
 
 ### Ist-Last-Daten aktualisieren
 
-Das Prognose-vs-Ist-Last-Diagramm braucht die gemessene Netzlast als
-committete Zeitreihe (`data/actual_load.parquet`). Der `ENTSOE_API_KEY`
-liegt nur lokal vor, **nicht** auf dem GitHub-Runner — daher wird die
-Ist-Last lokal heruntergeladen und ins Repo gepusht:
+Das Prognose-vs-Ist-Last-Diagramm (und das Pseudo-Team `entsoe`) braucht
+die gemessene Netzlast samt Day-ahead-Prognose als committete Zeitreihe
+(`data/actual_load.parquet`). Seit 2026-06-04 hält der tägliche
+`Daily Scoring`-Workflow diese Datei **automatisch** aktuell
+(`scripts/fetch_actuals.py` läuft nach dem Scoring mit dem
+`ENTSOE_API_KEY`-Secret und committet das Ergebnis im selben Score-PR).
+
+Ein lokaler Lauf ist nur noch als **Fallback/Backfill** nötig
+(`ENTSOE_API_KEY` in der Umgebung):
 
 ```bash
 uv run python scripts/fetch_actuals.py                  # alle relevanten Tage (Default)
@@ -110,12 +128,7 @@ uv run python scripts/fetch_actuals.py --force          # bereits vollständige 
 Anschließend `data/actual_load.parquet` per PR nach `main` bringen
 (Admin-Merge — der PR berührt keine `submissions/**`-Datei, wird also von
 `validate-pr.yml` pass-through abgenickt, aber bewusst **nicht**
-auto-gemerged).
-
-*Keep actuals fresh going forward:* run `uv run python
-scripts/fetch_actuals.py` locally whenever you want newer days, then
-commit `data/actual_load.parquet` via a PR (same flow). It skips
-already-fetched days and defers days ENTSO-E hasn't published yet.
+auto-gemerged). Details: DEPLOYMENT.md, Abschnitt „Laufender Betrieb".
 
 Das Skript nutzt dieselbe Download-Logik wie das Scoring
 (`score_day.fetch_ground_truth`): **Retry/Backoff** bei transienten

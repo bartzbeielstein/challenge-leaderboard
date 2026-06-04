@@ -38,6 +38,18 @@ def load_teams() -> dict[str, str]:
     return {t["id"]: t["display_name"] for t in data.get("teams") or []}
 
 
+def load_pseudo_ids() -> set[str]:
+    """Ids der Pseudo-Teams (``pseudo: true`` in teams.yml).
+
+    Pseudo-Teams submitten keine CSVs; ihre Scores werden zur Build-Zeit
+    direkt aus den committeten ENTSO-E-Daten abgeleitet (s.
+    ``entsoe_pseudo_scores``). Persistierte Zeilen mit diesen Ids in
+    ``scores.parquet`` werden ignoriert — die Ableitung ist autoritativ.
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return {t["id"] for t in (data.get("teams") or []) if t.get("pseudo", False)}
+
+
 def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     if scores.empty:
         return pd.DataFrame(columns=[
@@ -97,19 +109,22 @@ def daily_breakdown(
     return {"dates": dates, "teams": teams}
 
 
-def entsoe_baseline_scores(
-    actuals: pd.DataFrame | None, existing: pd.DataFrame
+def entsoe_pseudo_scores(
+    actuals: pd.DataFrame | None, scored_dates: set[str]
 ) -> pd.DataFrame:
-    """Tages-Scores der ENTSO-E-Day-ahead-Prognose als Leaderboard-Baseline.
+    """Tages-Scores des Pseudo-Teams ``entsoe`` direkt aus den ENTSO-E-Daten.
 
     Berechnet MAE/RMSE/MAPE der ``entsoe_forecast_mw``-Spalte aus
     ``data/actual_load.parquet`` gegen den Ist-Load — zur Build-Zeit aus den
     committeten Daten abgeleitet (kein API-Key), nicht in ``scores.parquet``
-    persistiert (bleibt mit den Actuals synchron). So erscheint die offizielle
-    ENTSO-E-Prognose als gerankte Referenz neben den Teams.
+    persistiert. Die Ableitung ist **autoritativ**: persistierte
+    ``entsoe``-Zeilen werden in ``main()`` vorab verworfen.
 
-    Nur vollständige Tage (24 Stunden) und nur Tage, die nicht bereits als
-    ``entsoe``-Zeile in ``existing`` gescort sind (echte Scores haben Vorrang).
+    Zeitraum-Sync: nur Tage aus ``scored_dates`` (= die Zieltage, für die
+    die regulären Teams Scores haben) — entsoe ist damit exakt über
+    denselben Zeitraum bewertet wie alle anderen, nie mehr, nie weniger.
+    Unvollständige Tage (<24 Stunden Forecast+Load) werden übersprungen
+    und geloggt.
     """
     if (actuals is None or actuals.empty
             or "entsoe_forecast_mw" not in actuals.columns):
@@ -119,16 +134,13 @@ def entsoe_baseline_scores(
         return pd.DataFrame()
     df["target_date"] = df["timestamp_utc"].str.slice(0, 10)
 
-    already: set[str] = set()
-    if not existing.empty and "team_id" in existing.columns:
-        already = set(
-            existing.loc[existing["team_id"] == ENTSOE_BASELINE_ID,
-                         "target_date"].astype(str)
-        )
-
     rows: list[dict] = []
     for d, g in df.groupby("target_date"):
-        if d in already or len(g) < 24:
+        if d not in scored_dates:
+            continue
+        if len(g) < 24:
+            print(f"[build] entsoe: {d} übersprungen "
+                  f"({len(g)}/24 Stunden Forecast+Load)")
             continue
         actual = g["load_mw"].to_numpy(dtype=float)
         err = g["entsoe_forecast_mw"].to_numpy(dtype=float) - actual
@@ -159,7 +171,12 @@ def build_figures(
     liefert None — die Headline-Figur blendet sich sauber aus.
     """
     submissions_dir = REPO_ROOT / "submissions"
-    subs = charts.load_submissions(submissions_dir, list(names))
+    # Pseudo-Teams haben keine Submissions — ausschließen, damit ein evtl.
+    # liegengebliebenes Verzeichnis keine doppelte Chart-Spur erzeugt (die
+    # gestrichelte ENTSO-E-Spur kommt direkt aus actual_load.parquet).
+    pseudo_ids = load_pseudo_ids()
+    subs = charts.load_submissions(
+        submissions_dir, [tid for tid in names if tid not in pseudo_ids])
     return {
         "forecast": charts.fig_to_html(
             charts.fig_forecast_vs_actual(
@@ -226,11 +243,19 @@ def main() -> None:
         scores = pd.DataFrame(columns=[
             "team_id", "target_date", "scored_at_utc", "mae", "rmse", "mape",
         ])
+    # Pseudo-Teams: evtl. persistierte Zeilen verwerfen — die Build-Zeit-
+    # Ableitung aus den ENTSO-E-Daten ist autoritativ. Der Datums-Raum
+    # (scored_dates) wird DANACH bestimmt, damit ein Pseudo-Team nie den
+    # eigenen Bewertungszeitraum definiert (Sync mit den echten Teams).
+    pseudo_ids = load_pseudo_ids()
+    if not scores.empty and pseudo_ids:
+        scores = scores[~scores["team_id"].isin(pseudo_ids)].copy()
+    scored = set(scores["target_date"].astype(str)) if not scores.empty else set()
     actuals = charts.load_actuals(REPO_ROOT / "data" / "actual_load.parquet")
-    # ENTSO-E-Day-ahead-Prognose als gerankte Baseline ins Leaderboard.
-    baseline = entsoe_baseline_scores(actuals, scores)
-    if not baseline.empty:
-        scores = pd.concat([scores, baseline], ignore_index=True)
+    # ENTSO-E-Day-ahead-Prognose als gerankter Pseudo-Team-Eintrag.
+    pseudo = entsoe_pseudo_scores(actuals, scored)
+    if not pseudo.empty:
+        scores = pd.concat([scores, pseudo], ignore_index=True)
     board = aggregate(scores, names)
     daily = daily_breakdown(scores, names, list(board["team_id"]))
     figs = build_figures(board, daily, scores, names, actuals)

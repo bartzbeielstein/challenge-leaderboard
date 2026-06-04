@@ -154,6 +154,20 @@ def test_forecast_no_entsoe_trace_when_column_absent():
     assert not any(t.name.startswith("ENTSO-E Prognose") for t in fig.data)
 
 
+def test_forecast_entsoe_label_prefers_score_row():
+    # With a pseudo-team score row present, the dashed-trace MAE label uses
+    # that value (figure and leaderboard table show the same number).
+    scores = pd.concat([_scores(), pd.DataFrame([
+        {"team_id": "entsoe", "target_date": "2026-05-26", "mae": 123.0,
+         "rmse": 130.0, "mape": 1.2, "carried_forward": False},
+    ])], ignore_index=True)
+    actuals = _actuals("2026-05-26", with_forecast=True)  # inline MAE wäre 30
+    subs = {"team_4": {"2026-05-26": _sub("2026-05-26")}}
+    fig = charts.fig_forecast_vs_actual(actuals, subs, scores, NAMES)
+    entsoe = next(t for t in fig.data if t.name.startswith("ENTSO-E Prognose"))
+    assert "MAE 123" in entsoe.name
+
+
 def test_forecast_multi_day_exposes_calendar_meta_and_hides_nondefault():
     actuals = pd.concat([_actuals("2026-05-26", with_forecast=False),
                          _actuals("2026-05-27", with_forecast=False)],
