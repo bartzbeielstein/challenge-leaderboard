@@ -54,7 +54,10 @@
              border-bottom: 1px solid var(--line); }
     th { background: #fafbfc; font-size: .82rem; text-transform: uppercase;
          letter-spacing: .03em; color: var(--muted); }
-    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Numerische Spalten rechtsbündig — Header (th.num) wie Werte (td.num),
+       damit Spaltenkopf und Zahlen bündig untereinander stehen. */
+    th.num, td.num { text-align: right; }
+    td.num { font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) td { background: #fcfcfd; }
     /* Gesamtbester (Zeile 1) nur in der Haupt-Rangliste hervorheben. */
     table.ranking tbody tr:first-child td { font-weight: 600; }
