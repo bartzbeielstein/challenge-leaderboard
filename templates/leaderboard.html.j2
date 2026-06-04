@@ -105,6 +105,16 @@
     .cal-day.sel { background: var(--accent); color: #fff; }
     .rank-badge { display: inline-block; min-width: 1.5rem; text-align: center;
                   font-weight: 600; }
+    /* Wochen-Umschalter der Tagesfehler-Tabellen; Datums-Header behalten
+       das deutsche Kurzformat („Di, 26.5.26") statt Großschreibung. */
+    .daily-card th[data-week] { text-transform: none; }
+    .week-nav { display: flex; align-items: center; gap: .6rem;
+                margin: 0 0 .8rem; }
+    .week-label {
+      padding: .35rem .8rem; font-weight: 600; font-size: .9rem;
+      color: var(--accent); background: var(--accent-soft);
+      border-radius: 999px;
+    }
     footer { color: var(--muted); font-size: .88rem; margin-top: 2rem;
              text-align: center; }
   </style>
@@ -310,6 +320,11 @@
   {% if figs and figs.leaderboard %}
   <section class="card">
     <h2>Mittlere MAE je Team</h2>
+    <p class="meta">
+      Mittlerer absoluter Fehler [MW] über alle bewerteten Tage —
+      die <b>Ranking-Metrik</b> des Leaderboards. Jede Stunde zählt gleich;
+      kleiner = besser.
+    </p>
     {{ figs.leaderboard | safe }}
   </section>
   {% endif %}
@@ -317,7 +332,51 @@
   {% if figs and figs.leaderboard_rmse %}
   <section class="card">
     <h2>Mittlerer RMSE je Team</h2>
+    <p class="meta">
+      Wurzel des mittleren quadratischen Fehlers [MW]. Quadrieren gewichtet
+      große Einzelfehler überproportional — wer Lastspitzen verpasst, fällt
+      hier stärker ab als bei der MAE; kleiner = besser.
+    </p>
     {{ figs.leaderboard_rmse | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_mape %}
+  <section class="card">
+    <h2>Mittlere MAPE je Team</h2>
+    <p class="meta">
+      Mittlerer absoluter Fehler relativ zur Ist-Last [%] — die klassische
+      Referenzmetrik der Lastprognose-Praxis, vergleichbar über Tage mit
+      unterschiedlichem Lastniveau; kleiner = besser.
+    </p>
+    {{ figs.leaderboard_mape | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_bias %}
+  <section class="card">
+    <h2>Mittlerer Bias je Team</h2>
+    <p class="meta">
+      Ø(Prognose − Ist) [MW], <b>signiert</b>: negativ = systematische
+      Unterprognose (im Netzbetrieb die teurere Richtung), positiv =
+      Überprognose. Bester Wert = am nächsten an der 0-Linie (gepunktet) —
+      ein kleiner Bias bei großer MAE bedeutet: die Fehler heben sich auf,
+      sind aber stündlich trotzdem groß.
+    </p>
+    {{ figs.leaderboard_bias | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_upr %}
+  <section class="card">
+    <h2>Mittlere UPR je Team</h2>
+    <p class="meta">
+      Under-Prediction Rate [%]: Anteil der Stunden, in denen die Prognose
+      <b>unter</b> der Ist-Last lag. 50&nbsp;% (gepunktete Linie) ≈
+      ausgewogen; Werte nahe 100&nbsp;% bzw. 0&nbsp;% zeigen systematisch
+      einseitige Prognosen. Bester Wert = am nächsten an 50&nbsp;%.
+    </p>
+    {{ figs.leaderboard_upr | safe }}
   </section>
   {% endif %}
 
@@ -333,20 +392,47 @@
   {% endif %}
 
   {% if daily and daily.dates %}
-  <section class="card">
-    <h2>Tagesfehler je Team [MAE]</h2>
+  {# Tagesfehler-Tabellen für alle Metriken — Reihenfolge wie die
+     Leaderboard-Spalten. "best" je Metrik: Spaltenminimum (MAE/RMSE/MAPE),
+     am nächsten an 0 (Bias) bzw. an 50 % (UPR). #}
+  {% set daily_tables = [
+    ("mae",  "MAE",  "%.2f",  "MAE [MW] pro Zieltag: mittlerer absoluter
+        Fehler. <b>Fett</b> markiert den besten Wert des Tages
+        (Spaltenminimum)."),
+    ("rmse", "RMSE", "%.2f",  "RMSE [MW] pro Zieltag: quadratisches
+        Fehlermaß, bestraft Ausreißer/verpasste Spitzen stärker.
+        <b>Fett</b> markiert den besten Wert des Tages (Spaltenminimum)."),
+    ("mape", "MAPE", "%.2f",  "MAPE [%] pro Zieltag: absoluter Fehler
+        relativ zur Ist-Last — die Referenzmetrik der Praxis.
+        <b>Fett</b> markiert den besten Wert des Tages (Spaltenminimum)."),
+    ("bias", "Bias", "%+.2f", "Bias [MW] pro Zieltag: Ø(Prognose − Ist),
+        signiert — negativ = Unterprognose, positiv = Überprognose.
+        <b>Fett</b> markiert den Tageswert, der am nächsten an 0 liegt."),
+    ("upr",  "UPR",  "%.1f",  "UPR [%] pro Zieltag: Anteil der Stunden mit
+        Prognose &lt; Ist. 50 % ≈ ausgewogen. <b>Fett</b> markiert den
+        Tageswert, der am nächsten an 50 % liegt."),
+  ] %}
+  {% for mkey, mlabel, mfmt, mdesc in daily_tables %}
+  <section class="card daily-card">
+    <h2>Tagesfehler je Team [{{ mlabel }}]</h2>
     <p class="meta">
-      MAE [MW] pro Zieltag. <b>Fett</b> markiert den besten Wert des Tages
-      (Spaltenminimum). Werte in <span class="locf">grau</span> kennzeichnen
+      {{ mdesc | safe }} Werte in <span class="locf">grau</span> kennzeichnen
       eine via LOCF fortgeschriebene Prognose (keine frische Submission für
       diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
       Forecast vorlag.
     </p>
+    <div class="week-nav" hidden>
+      <button type="button" class="cal-nav week-prev"
+              aria-label="Vorige Woche">‹</button>
+      <span class="week-label"></span>
+      <button type="button" class="cal-nav week-next"
+              aria-label="Nächste Woche">›</button>
+    </div>
     <table>
       <thead>
         <tr>
           <th>Team</th>
-          {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
+          {% for m in daily.date_meta %}<th class="num" data-week="{{ m.week }}">{{ m.label }}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -354,10 +440,11 @@
         <tr>
           <td>{{ team.display_name }}</td>
           {% for c in team.cells %}
-            {% if c.mae is none %}
-              <td class="miss">—</td>
+            {% set wk = daily.date_meta[loop.index0].week %}
+            {% if c[mkey] is none %}
+              <td class="miss" data-week="{{ wk }}">—</td>
             {% else %}
-              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c.best_mae else '' }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ "%.2f"|format(c.mae) }}</td>
+              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c['best_' ~ mkey] else '' }}" data-week="{{ wk }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ mfmt|format(c[mkey]) }}</td>
             {% endif %}
           {% endfor %}
         </tr>
@@ -365,39 +452,49 @@
       </tbody>
     </table>
   </section>
+  {% endfor %}
+  <script>
+  (function () {
+    "use strict";
+    // Wochen-Umschalter: blendet pro Tagesfehler-Tabelle nur die Spalten
+    // der gewählten ISO-Woche ein (Default: jüngste Woche). Ohne JS oder
+    // bei nur einer Woche bleiben alle Spalten sichtbar.
+    document.querySelectorAll(".daily-card").forEach(function (sec) {
+      var ths = sec.querySelectorAll("th[data-week]");
+      var weeks = [];
+      ths.forEach(function (th) {
+        if (weeks.indexOf(th.dataset.week) === -1) weeks.push(th.dataset.week);
+      });
+      if (weeks.length < 2) { return; }
+      var nav = sec.querySelector(".week-nav");
+      var prev = nav.querySelector(".week-prev");
+      var next = nav.querySelector(".week-next");
+      var label = nav.querySelector(".week-label");
+      var idx = weeks.length - 1;
 
-  <section class="card">
-    <h2>Tagesfehler je Team [RMSE]</h2>
-    <p class="meta">
-      RMSE [MW] pro Zieltag. <b>Fett</b> markiert den besten Wert des Tages
-      (Spaltenminimum). Werte in <span class="locf">grau</span> kennzeichnen
-      eine via LOCF fortgeschriebene Prognose (keine frische Submission für
-      diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
-      Forecast vorlag.
-    </p>
-    <table>
-      <thead>
-        <tr>
-          <th>Team</th>
-          {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-      {% for team in daily.teams %}
-        <tr>
-          <td>{{ team.display_name }}</td>
-          {% for c in team.cells %}
-            {% if c.rmse is none %}
-              <td class="miss">—</td>
-            {% else %}
-              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c.best_rmse else '' }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ "%.2f"|format(c.rmse) }}</td>
-            {% endif %}
-          {% endfor %}
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </section>
+      function render() {
+        var wk = weeks[idx];
+        sec.querySelectorAll("[data-week]").forEach(function (el) {
+          el.style.display = el.dataset.week === wk ? "" : "none";
+        });
+        var vis = sec.querySelectorAll("th[data-week='" + wk + "']");
+        label.textContent = "KW " + parseInt(wk.split("-W")[1], 10) + " · "
+          + vis[0].textContent + " – " + vis[vis.length - 1].textContent;
+        prev.disabled = idx === 0;
+        next.disabled = idx === weeks.length - 1;
+      }
+
+      prev.addEventListener("click", function () {
+        if (idx > 0) { idx--; render(); }
+      });
+      next.addEventListener("click", function () {
+        if (idx < weeks.length - 1) { idx++; render(); }
+      });
+      nav.hidden = false;
+      render();
+    });
+  })();
+  </script>
   {% endif %}
 
   <footer>

@@ -110,13 +110,17 @@ interaktive Plotly-Diagramme auf der GitHub-Pages-Seite (Figuren in
   Plot) die 24-h-Prognose jedes Teams gegen die gemessene DE-Netzlast
   (ENTSO-E *Actual Total Load*), MAE je Team in der Legende.
 - **Mittlere MAE je Team** — horizontales Balkendiagramm (grün = gut → rot).
-- **Mittlerer RMSE je Team** — analoges Balkendiagramm, sortiert nach
-  mittlerer RMSE (Mittel der Tages-RMSEs; Anzeige-Metrik, das Ranking
-  bleibt bei der MAE).
+- **Mittlerer RMSE / MAPE / Bias / UPR je Team** — analoge Balkendiagramme
+  für jede Leaderboard-Spalte, je mit Erklärung. RMSE/MAPE: kleiner =
+  besser; Bias (signiert) und UPR sortieren nach Distanz zum Idealwert
+  (0 MW bzw. 50 %, gepunktete Referenzlinie). Anzeige-Metriken — das
+  Ranking bleibt bei der MAE.
 - **MAE-Verlauf** — Tages-MAE je Team über die Zeit; offene Marker
   kennzeichnen via LOCF fortgeschriebene Tage.
-- **Tagesfehler je Team [MAE] / [RMSE]** — Tabellen mit Tageswerten;
-  fett = Spaltenminimum (Tagesbester).
+- **Tagesfehler je Team [MAE] / [RMSE] / [MAPE] / [Bias] / [UPR]** —
+  Tabellen mit Tageswerten, Wochen-Umschalter (Default: jüngste Woche)
+  und deutschen Datums-Headern („Di, 26.5.26"); fett = Tagesbester
+  (Spaltenminimum bzw. am nächsten an 0/50 % für Bias/UPR).
 
 Plotly.js ist einmalig in `index.html` eingebettet (self-contained,
 offline-fähig, via `uv.lock` gepinnt; deterministische `div_id`s → CR-2).

@@ -121,6 +121,33 @@ def test_daily_breakdown_pivots_by_team_and_date():
     assert out["teams"][1]["cells"][0]["best_rmse"] is True  # team_4 @ 05-12
     assert out["teams"][0]["cells"][1]["best_rmse"] is True  # hot_rod 2236 < 4090
     assert out["teams"][1]["cells"][1]["best_rmse"] is False
+    # Zeilen ohne bias/upr-Spalten -> None-Zellen, nie best.
+    assert out["teams"][1]["cells"][0]["bias"] is None
+    assert out["teams"][1]["cells"][0]["best_bias"] is False
+    # Anzeige-Metadaten: deutsches Label + ISO-Woche (05-12/05-26 = Dienstage).
+    assert out["date_meta"][0]["label"] == "Di, 12.5.26"
+    assert out["date_meta"][1]["label"] == "Di, 26.5.26"
+    assert out["date_meta"][0]["week"] == "2026-W20"
+    assert out["date_meta"][1]["week"] == "2026-W22"
+
+
+def test_daily_breakdown_best_bias_and_upr_use_ideal_value():
+    # Bias: bester = am nächsten an 0 (|+50| < |-100|).
+    # UPR: bester = am nächsten an 50 % (|70-50| < |10-50|).
+    scores = pd.DataFrame([
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 1.0,
+         "rmse": 1.0, "mape": 1.0, "bias": -100.0, "upr": 10.0,
+         "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 2.0,
+         "rmse": 2.0, "mape": 2.0, "bias": 50.0, "upr": 70.0,
+         "carried_forward": False},
+    ])
+    out = bl.daily_breakdown(scores, {}, ["team_4", "hot_rod"])
+    by_id = {t["team_id"]: t["cells"][0] for t in out["teams"]}
+    assert by_id["hot_rod"]["best_bias"] is True
+    assert by_id["team_4"]["best_bias"] is False
+    assert by_id["hot_rod"]["best_upr"] is True
+    assert by_id["team_4"]["best_upr"] is False
 
 
 def test_daily_breakdown_marks_ties_as_best():
@@ -145,15 +172,22 @@ def test_main_writes_daily_section_in_html(tmp_path):
     ])
     bl.main()
     html = (tmp_path / "public" / "index.html").read_text()
-    assert "Tagesfehler je Team [MAE]" in html
-    assert "Tagesfehler je Team [RMSE]" in html
-    assert "2026-05-12" in html
-    assert "2026-05-26" in html
-    # Tagesbeste fett: je Spalte genau eine best-Zelle, in beiden Tabellen
-    # (hier 2 Spalten mit jeweils genau einem Wert -> 2 + 2).
-    assert html.count('class="num best"') == 4
+    for metric in ("MAE", "RMSE", "MAPE", "Bias", "UPR"):
+        assert f"Tagesfehler je Team [{metric}]" in html
+    # Spalten-Header: deutsches Kurzformat mit Wochentag statt ISO-Datum.
+    assert "Di, 12.5.26" in html
+    assert "Di, 26.5.26" in html
+    # Wochen-Umschalter-Markup + data-week-Attribute vorhanden.
+    assert 'class="week-nav"' in html
+    assert 'data-week="2026-W20"' in html
+    assert 'data-week="2026-W22"' in html
+    # Tagesbeste fett: je Spalte genau eine best-Zelle, in allen 5 Tabellen
+    # (hier 2 Spalten mit jeweils genau einem Wert -> 5 x 2). Mit
+    # data-week-Suffix im Tag, daher Prefix-Zählung über beide Varianten.
+    assert html.count('class="num best"') == 10
     daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
     assert daily["dates"] == ["2026-05-12", "2026-05-26"]
+    assert daily["date_meta"][0]["week"] == "2026-W20"
 
 
 def test_main_handles_empty_scores(tmp_path):
@@ -201,6 +235,12 @@ def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
     assert 'id="fig-leaderboard"' in html
     assert 'id="fig-leaderboard-rmse"' in html
     assert "Mittlerer RMSE je Team" in html
+    # Balkendiagramme für alle Sekundärmetriken, in Spaltenreihenfolge.
+    assert 'id="fig-leaderboard-mape"' in html
+    assert 'id="fig-leaderboard-bias"' in html
+    assert 'id="fig-leaderboard-upr"' in html
+    assert html.index("Mittlere MAPE je Team") < html.index(
+        "Mittlerer Bias je Team") < html.index("Mittlere UPR je Team")
     assert 'id="fig-mae-time"' in html
     assert 'id="fig-forecast"' not in html       # no actuals -> self-disabled
     assert "Prognose vs. Ist-Last" not in html

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +31,7 @@ TEAMS_PATH = REPO_ROOT / "teams.yml"
 PUBLIC_DIR = REPO_ROOT / "public"
 ENTSOE_BASELINE_ID = "entsoe"
 TEMPLATE_DIR = REPO_ROOT / "templates"
+WEEKDAYS_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
 
 def load_teams() -> dict[str, str]:
@@ -90,14 +91,28 @@ def daily_breakdown(
     ``rank_order`` fixes the row order to match the main leaderboard; dates
     are sorted ascending so the most recent column is rightmost. Cells for
     a (team, date) pair without a score are returned as None — the template
-    renders them as a dash. Pro Spalte (Zieltag) markieren ``best_mae`` /
-    ``best_rmse`` die jeweils kleinste MAE bzw. RMSE (Tagesbester, im
-    Template fett); bei Gleichstand alle betroffenen Zellen.
+    renders them as a dash. Pro Spalte (Zieltag) markieren ``best_<metrik>``
+    die Tagesbesten (im Template fett); bei Gleichstand alle betroffenen
+    Zellen. „Bester" heißt: kleinster Wert (MAE/RMSE/MAPE), am nächsten an
+    0 (Bias) bzw. am nächsten an 50 % (UPR = ausgewogen).
     """
     if scores.empty:
-        return {"dates": [], "teams": []}
+        return {"dates": [], "date_meta": [], "teams": []}
 
+    metrics = ["mae", "rmse", "mape", "bias", "upr"]
     dates = sorted(scores["target_date"].unique().tolist())
+    # Anzeige-Metadaten je Zieltag: deutsches Kurzlabel („Di, 26.5.26")
+    # und ISO-Wochen-Schlüssel für den Wochen-Umschalter im Template.
+    date_meta: list[dict] = []
+    for d in dates:
+        dt = date.fromisoformat(str(d))
+        iso = dt.isocalendar()
+        date_meta.append({
+            "date": str(d),
+            "label": f"{WEEKDAYS_DE[dt.weekday()]}, "
+                     f"{dt.day}.{dt.month}.{dt.year % 100:02d}",
+            "week": f"{iso[0]}-W{iso[1]:02d}",
+        })
     lookup = {(r["team_id"], r["target_date"]): r
               for r in scores.to_dict("records")}
 
@@ -106,39 +121,38 @@ def daily_breakdown(
         cells = []
         for d in dates:
             r = lookup.get((team_id, d))
-            if r is None:
-                cells.append({"mae": None, "rmse": None, "mape": None,
-                              "carried": False,
-                              "best_mae": False, "best_rmse": False})
-            else:
-                cells.append({
-                    "mae": round(float(r["mae"]), 2),
-                    "rmse": round(float(r["rmse"]), 2),
-                    "mape": round(float(r["mape"]), 2),
-                    "carried": bool(r.get("carried_forward", False)),
-                    "best_mae": False,
-                    "best_rmse": False,
-                })
+            cell = {"carried": bool(r.get("carried_forward", False))
+                    if r is not None else False}
+            for m in metrics:
+                v = r.get(m) if r is not None else None
+                cell[m] = round(float(v), 2) \
+                    if v is not None and pd.notna(v) else None
+                cell[f"best_{m}"] = False
+            cells.append(cell)
         teams.append({
             "team_id": team_id,
             "display_name": names.get(team_id, team_id),
             "cells": cells,
         })
 
-    # Tagesbester je Spalte und Metrik: kleinster (gerundeter) Wert über
-    # alle Teams.
-    for metric, flag in (("mae", "best_mae"), ("rmse", "best_rmse")):
+    # Tagesbester je Spalte und Metrik: kleinster Schlüsselwert über alle
+    # Teams. Schlüssel = Wert selbst (kleiner = besser) bzw. Distanz zum
+    # Idealwert (Bias → 0, UPR → 50 %).
+    keyfns = {"mae": lambda v: v, "rmse": lambda v: v, "mape": lambda v: v,
+              "bias": abs, "upr": lambda v: abs(v - 50.0)}
+    for m in metrics:
+        key = keyfns[m]
         for j in range(len(dates)):
-            col = [t["cells"][j][metric] for t in teams
-                   if t["cells"][j][metric] is not None]
+            col = [t["cells"][j][m] for t in teams
+                   if t["cells"][j][m] is not None]
             if not col:
                 continue
-            best = min(col)
+            best_key = min(key(v) for v in col)
             for t in teams:
                 c = t["cells"][j]
-                c[flag] = c[metric] is not None and c[metric] == best
+                c[f"best_{m}"] = c[m] is not None and key(c[m]) == best_key
 
-    return {"dates": dates, "teams": teams}
+    return {"dates": dates, "date_meta": date_meta, "teams": teams}
 
 
 def entsoe_pseudo_scores(
@@ -223,6 +237,15 @@ def build_figures(
         "leaderboard_rmse": charts.fig_to_html(
             charts.fig_mean_rmse_bar(board, div_id="fig-leaderboard-rmse"),
             "fig-leaderboard-rmse"),
+        "leaderboard_mape": charts.fig_to_html(
+            charts.fig_mean_mape_bar(board, div_id="fig-leaderboard-mape"),
+            "fig-leaderboard-mape"),
+        "leaderboard_bias": charts.fig_to_html(
+            charts.fig_mean_bias_bar(board, div_id="fig-leaderboard-bias"),
+            "fig-leaderboard-bias"),
+        "leaderboard_upr": charts.fig_to_html(
+            charts.fig_mean_upr_bar(board, div_id="fig-leaderboard-upr"),
+            "fig-leaderboard-upr"),
         "mae_time": charts.fig_to_html(
             charts.fig_mae_over_time(scores, names, div_id="fig-mae-time"),
             "fig-mae-time"),

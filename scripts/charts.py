@@ -216,35 +216,49 @@ def fig_forecast_vs_actual(
 # --------------------------------------------------------------------------
 
 def _fig_mean_metric_bar(
-    board: pd.DataFrame, *, column: str, metric_label: str, title: str
+    board: pd.DataFrame, *, column: str, metric_label: str, title: str,
+    unit: str = "MW", fmt: str = "{:.0f}", best_at: float | None = None,
 ) -> go.Figure | None:
-    """Horizontale Balken eines Mittelwerts je Team (bester oben, grün=gut)."""
+    """Horizontale Balken eines Mittelwerts je Team (bester oben, grün=gut).
+
+    ``best_at=None``: kleiner = besser (MAE/RMSE/MAPE) — aufsteigend
+    sortiert und gefärbt. ``best_at=x``: der Idealwert liegt bei ``x``
+    (Bias → 0, UPR → 50) — sortiert und gefärbt nach |Wert − x|, mit
+    Referenzlinie bei ``x``; die Balken selbst zeigen den signierten Wert.
+    """
     if board is None or board.empty or column not in board.columns:
         return None
-    # Aufsteigend nach der jeweiligen Metrik sortieren (bester zuerst) —
-    # das Board selbst bleibt nach mean_mae gerankt. kind="stable", damit
-    # Gleichstände die Board-Reihenfolge behalten (Determinismus, CR-2).
-    b = board.sort_values(column, ascending=True, na_position="last",
-                          kind="stable")
+    b = board.copy()
+    # Sortier-/Farbschlüssel: Distanz zum Idealwert (bzw. der Wert selbst).
+    # kind="stable", damit Gleichstände die Board-Reihenfolge behalten
+    # (Determinismus, CR-2).
+    b["_key"] = (b[column] - best_at).abs() if best_at is not None \
+        else b[column]
+    b = b.sort_values("_key", ascending=True, na_position="last",
+                      kind="stable")
     names = b["display_name"].tolist()
     vals = b[column].astype(float).tolist()
+    keys = b["_key"].astype(float).tolist()
     fig = go.Figure(go.Bar(
         x=vals, y=names, orientation="h",
-        text=[f"{v:.0f}" for v in vals], textposition="auto",
+        text=[fmt.format(v) for v in vals], textposition="auto",
         marker=dict(
-            color=vals, colorscale="RdYlGn", reversescale=True,
+            color=keys, colorscale="RdYlGn", reversescale=True,
             line=dict(color="rgba(0,0,0,0.08)", width=1),
             showscale=False,
         ),
         hovertemplate=("%{y}<br>Ø " + metric_label
-                       + " = %{x:.1f} MW<extra></extra>"),
+                       + " = %{x:.2f} " + unit + "<extra></extra>"),
     ))
+    if best_at is not None:
+        fig.add_vline(x=best_at, line_width=1.5, line_dash="dot",
+                      line_color="#9aa1ab")
     # Aufsteigend sortiert (bester zuerst) → reversed, damit der beste
     # Balken oben steht.
     fig.update_yaxes(autorange="reversed")
     _base_layout(fig, title=title, yaxis_title="")
     fig.update_layout(showlegend=False, hovermode="closest",
-                      xaxis_title=f"Ø {metric_label} [MW]")
+                      xaxis_title=f"Ø {metric_label} [{unit}]")
     return fig
 
 
@@ -262,6 +276,33 @@ def fig_mean_rmse_bar(
     """Horizontale Balken der mittleren RMSE je Team (beste oben, grün=gut)."""
     return _fig_mean_metric_bar(board, column="mean_rmse", metric_label="RMSE",
                                 title="Mittlerer RMSE je Team")
+
+
+def fig_mean_mape_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-mape"
+) -> go.Figure | None:
+    """Horizontale Balken der mittleren MAPE je Team (beste oben, grün=gut)."""
+    return _fig_mean_metric_bar(board, column="mean_mape", metric_label="MAPE",
+                                title="Mittlere MAPE je Team",
+                                unit="%", fmt="{:.2f}")
+
+
+def fig_mean_bias_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-bias"
+) -> go.Figure | None:
+    """Signierte Bias-Balken je Team; bester = nächster an 0 (oben)."""
+    return _fig_mean_metric_bar(board, column="mean_bias", metric_label="Bias",
+                                title="Mittlerer Bias je Team",
+                                fmt="{:+.0f}", best_at=0.0)
+
+
+def fig_mean_upr_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-upr"
+) -> go.Figure | None:
+    """UPR-Balken je Team; ausgewogen = nahe 50 % (oben, Referenzlinie)."""
+    return _fig_mean_metric_bar(board, column="mean_upr", metric_label="UPR",
+                                title="Mittlere UPR je Team",
+                                unit="%", fmt="{:.1f}", best_at=50.0)
 
 
 # --------------------------------------------------------------------------
