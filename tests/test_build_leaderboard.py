@@ -70,6 +70,25 @@ def test_aggregate_ranks_by_mean_mae_then_n_submissions_desc(tmp_path):
     assert list(out["mean_upr"]) == [50.0, 50.0, 100.0]
 
 
+def test_annotate_leaderboard_best_marks_columnwise_winners():
+    rows = [
+        {"team_id": "a", "mean_mae": 100.0, "mean_rmse": 300.0,
+         "mean_mape": 2.0, "mean_bias": -80.0, "mean_upr": 45.0,
+         "n_submissions": 9},
+        {"team_id": "b", "mean_mae": 200.0, "mean_rmse": 250.0,
+         "mean_mape": 2.0, "mean_bias": 30.0, "mean_upr": 10.0,
+         "n_submissions": 9},
+    ]
+    out = bl.annotate_leaderboard_best(rows)
+    a, b = out[0], out[1]
+    assert a["best_mae"] and not b["best_mae"]            # 100 < 200
+    assert b["best_rmse"] and not a["best_rmse"]          # 250 < 300
+    assert a["best_mape"] and b["best_mape"]              # Gleichstand 2.0
+    assert b["best_bias"] and not a["best_bias"]          # |30| < |-80|
+    assert a["best_upr"] and not b["best_upr"]            # |45-50| < |10-50|
+    assert a["best_days"] and b["best_days"]              # Gleichstand max 9
+
+
 def test_main_writes_html_and_json(tmp_path):
     _seed_teams(tmp_path)
     _seed(tmp_path, [
@@ -182,9 +201,10 @@ def test_main_writes_daily_section_in_html(tmp_path):
     assert 'data-week="2026-W20"' in html
     assert 'data-week="2026-W22"' in html
     # Tagesbeste fett: je Spalte genau eine best-Zelle, in allen 5 Tabellen
-    # (hier 2 Spalten mit jeweils genau einem Wert -> 5 x 2). Mit
-    # data-week-Suffix im Tag, daher Prefix-Zählung über beide Varianten.
-    assert html.count('class="num best"') == 10
+    # (hier 2 Spalten mit jeweils genau einem Wert -> 5 x 2). Nur den
+    # Tagesfehler-Teil zählen — das Leaderboard hat eigene best-Zellen.
+    daily_html = html[html.index("Tagesfehler je Team [MAE]"):]
+    assert daily_html.count('class="num best"') == 10
     daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
     assert daily["dates"] == ["2026-05-12", "2026-05-26"]
     assert daily["date_meta"][0]["week"] == "2026-W20"

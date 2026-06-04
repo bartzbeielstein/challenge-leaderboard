@@ -252,6 +252,33 @@ def build_figures(
     }
 
 
+def annotate_leaderboard_best(rows: list[dict]) -> list[dict]:
+    """Spaltenbeste im Leaderboard markieren (Fettdruck im Template).
+
+    „Bester" je Spalte: kleinster Wert (Mean MAE/RMSE/MAPE), am nächsten
+    an 0 (Bias), am nächsten an 50 % (UPR) bzw. größter Wert (Bewertete
+    Tage). Verglichen wird auf Anzeige-Genauigkeit gerundet; Gleichstände
+    markieren alle betroffenen Zeilen.
+    """
+    specs = [
+        ("mean_mae", "best_mae", lambda v: round(v, 2)),
+        ("mean_rmse", "best_rmse", lambda v: round(v, 2)),
+        ("mean_mape", "best_mape", lambda v: round(v, 2)),
+        ("mean_bias", "best_bias", lambda v: abs(round(v, 2))),
+        ("mean_upr", "best_upr", lambda v: abs(round(v, 1) - 50.0)),
+        ("n_submissions", "best_days", lambda v: -v),
+    ]
+    for col, flag, key in specs:
+        keyed = [key(r[col]) for r in rows
+                 if r.get(col) is not None and pd.notna(r[col])]
+        best = min(keyed) if keyed else None
+        for r in rows:
+            v = r.get(col)
+            r[flag] = (v is not None and pd.notna(v)
+                       and best is not None and key(v) == best)
+    return rows
+
+
 def load_logo_uri(path: Path) -> str:
     """Logo als base64-Data-URI (self-contained, wie das Plotly-Bundle).
 
@@ -279,8 +306,9 @@ def render(
     # Die ~4.8 MB Plotly-Bibliothek nur einbetten, wenn überhaupt eine Figur
     # gerendert wird (leeres Leaderboard → keine Charts → kein Bundle).
     plotlyjs = get_plotlyjs() if any(figs.values()) else ""
+    rows = annotate_leaderboard_best(board.to_dict(orient="records"))
     html = template.render(
-        rows=board.to_dict(orient="records"),
+        rows=rows,
         daily=daily,
         figs=figs,
         plotlyjs=plotlyjs,
@@ -289,7 +317,7 @@ def render(
     )
     (PUBLIC_DIR / "index.html").write_text(html)
     (PUBLIC_DIR / "data" / "scores.json").write_text(
-        json.dumps(board.to_dict(orient="records"), indent=2, default=str)
+        json.dumps(rows, indent=2, default=str)
     )
     (PUBLIC_DIR / "data" / "daily.json").write_text(
         json.dumps(daily, indent=2, default=str)

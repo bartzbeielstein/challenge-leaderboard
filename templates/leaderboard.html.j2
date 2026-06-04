@@ -59,8 +59,8 @@
     th.num, td.num { text-align: right; }
     td.num { font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) td { background: #fcfcfd; }
-    /* Gesamtbester (Zeile 1) nur in der Haupt-Rangliste hervorheben. */
-    table.ranking tbody tr:first-child td { font-weight: 600; }
+    /* Gesamtbester (Zeile 1) bekommt die Trophäe; fett sind stattdessen
+       die Spaltenbesten (td.best, je Metrik). */
     table.ranking tbody tr:first-child td:first-child::before { content: "🏆 "; }
     td.locf { color: #9aa1ab; }
     td.miss { color: #d0d4da; text-align: right; }
@@ -164,18 +164,21 @@
         <tr>
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
-          <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
-          <td class="num">{{ "%.2f"|format(row.mean_rmse) }}</td>
-          <td class="num">{{ "%.2f"|format(row.mean_mape) }}</td>
-          <td class="num">{{ "%.2f"|format(row.mean_bias) }}</td>
-          <td class="num">{{ "%.1f"|format(row.mean_upr) }}</td>
-          <td class="num">{{ row.n_submissions }}</td>
+          <td class="num{{ ' best' if row.best_mae else '' }}">{{ "%.2f"|format(row.mean_mae) }}</td>
+          <td class="num{{ ' best' if row.best_rmse else '' }}">{{ "%.2f"|format(row.mean_rmse) }}</td>
+          <td class="num{{ ' best' if row.best_mape else '' }}">{{ "%.2f"|format(row.mean_mape) }}</td>
+          <td class="num{{ ' best' if row.best_bias else '' }}">{{ "%.2f"|format(row.mean_bias) }}</td>
+          <td class="num{{ ' best' if row.best_upr else '' }}">{{ "%.1f"|format(row.mean_upr) }}</td>
+          <td class="num{{ ' best' if row.best_days else '' }}">{{ row.n_submissions }}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
     <p class="meta">
-      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Bias</b> =
+      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Fett</b> markiert
+      den besten Wert jeder Spalte: Minimum bei MAE/RMSE/MAPE, am nächsten
+      an 0 beim Bias, am nächsten an 50&nbsp;% bei der UPR, Maximum bei den
+      bewerteten Tagen. <b>Bias</b> =
       Ø(Prognose − Ist), negativ = systematische Unterprognose; <b>UPR</b> =
       Anteil der Stunden mit Prognose &lt; Ist. Beides macht die im
       Netzbetrieb teurere Unterprognose-Richtung sichtbar, die
