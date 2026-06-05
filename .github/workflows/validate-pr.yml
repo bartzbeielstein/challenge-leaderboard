@@ -24,7 +24,13 @@ jobs:
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE_SHA" "$HEAD_SHA" -- 'submissions/**')
+          # Drei-Punkte-Diff (merge-base..HEAD) wie die GitHub-PR-Ansicht.
+          # Ein Zwei-Punkte-Diff vergleicht die Trees direkt und rechnet
+          # bei veralteten Forks alles, was sich seit dem Fork-Punkt auf
+          # main geändert hat, dem PR zu — z. B. erschienen nach dem
+          # Entfernen der team_4_entsoe-Submissions (PR #168) die
+          # gelöschten CSVs in Fork-PRs als "added" (PR #169/#171).
+          mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE_SHA...$HEAD_SHA" -- 'submissions/**')
           if [[ ${#CHANGED[@]} -eq 0 ]]; then
             echo "[validate] PR berührt keine Submission — pass-through (Non-Submission-Änderung)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
