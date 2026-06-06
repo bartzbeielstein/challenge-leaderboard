@@ -92,9 +92,9 @@ teams:
   - id: team_weather_report_entsoe
     display_name: "Team Weather Report (ENTSO-E)"
     github_handles: [LaloMohamad, yanickfotsing]
-  - id: Voltrion
+  - id: voltrion
     display_name: "Voltrion"
     github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
-  - id: Voltrion_entsoe
+  - id: voltrion_entsoe
     display_name: "Voltrion (ENTSO-E)"
     github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
