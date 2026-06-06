@@ -4,33 +4,97 @@
 #     - id: <filename-safe, lowercase>     # erscheint im Pfad submissions/<id>/...
 #       display_name: <freier String>      # erscheint im Leaderboard
 #       github_handles: [<gh-handle>, ...] # darf PRs mergen
+#       pseudo: true                       # optional: Pseudo-Team ohne CSV-
+#                                          # Submissions; Scores werden zur
+#                                          # Build-Zeit direkt aus den
+#                                          # ENTSO-E-Daten abgeleitet
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
+# Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
+# github_handles, display_name mit Zusatz "(ENTSO-E)"). Ausgenommen ist der
+# eigenständige ENTSO-E-Pseudo-Eintrag `entsoe`.
 teams:
   - id: a_team
     display_name: "Das A Team"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
+  - id: a_team_entsoe
+    display_name: "Das A Team (ENTSO-E)"
+    github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
   - id: syntaxerror
     display_name: "Syntaxerror"
-    github_handles: [lriethk, timmyhaeger,linus-thk]
+    github_handles: [lriethk, timhaeger,linus-thk]
+  - id: syntaxerror_entsoe
+    display_name: "Syntaxerror (ENTSO-E)"
+    github_handles: [lriethk, timhaeger,linus-thk]
   - id: team_fabinalii
     display_name: "Team Fabinalii"
-    github_handles: [akiev, feith, zakharuk]
+    github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
+  - id: team_fabinalii_entsoe
+    display_name: "Team Fabinalii (ENTSO-E)"
+    github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
   - id: team_4
-    display_name: "Team 4"
+    display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
+  - id: team_4_entsoe
+    display_name: "Team 4 SpotOptim (ENTSO-E)"
+    github_handles: [bartzbeielstein]
+  - id: team_4_optuna
+    display_name: "Team 4 Optuna"
+    github_handles: [bartzbeielstein]
+  - id: team_4_optuna_entsoe
+    display_name: "Team 4 Optuna (ENTSO-E)"
+    github_handles: [bartzbeielstein]
+  # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
+  # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
+  # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
+  - id: entsoe
+    display_name: "ENTSO-E"
+    pseudo: true
   - id: neura
     display_name: "Team Neura"
+    github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
+  - id: neura_entsoe
+    display_name: "Team Neura (ENTSO-E)"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
   - id: hot_rod
     display_name: "Hot Rod"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
+  - id: hot_rod_entsoe
+    display_name: "Hot Rod (ENTSO-E)"
+    github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
   - id: ddkast
     display_name: "DDKAST"
     github_handles: [bachmak, KareemYassen, INDYROD]
+  - id: ddkast_entsoe
+    display_name: "DDKAST (ENTSO-E)"
+    github_handles: [bachmak, KareemYassen, INDYROD]
   - id: eigen_squad
     display_name: "Eigen-Squad"
-    github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002]
+    github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
+  - id: eigen_squad_entsoe
+    display_name: "Eigen-Squad (ENTSO-E)"
+    github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
   - id: team_gladiators
     display_name: "Team Gladiators"
     github_handles: [gauravlokhande1100-prog]
+  - id: team_gladiators_entsoe
+    display_name: "Team Gladiators (ENTSO-E)"
+    github_handles: [gauravlokhande1100-prog]
+  - id: team_immerzuspaet
+    display_name: "Team ImmerZuSpaet"
+    github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
+  - id: team_immerzuspaet_entsoe
+    display_name: "Team ImmerZuSpaet (ENTSO-E)"
+    github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
+  - id: team_weather_report
+    display_name: "Team Weather Report"
+    github_handles: [LaloMohamad, yanickfotsing]
+  - id: team_weather_report_entsoe
+    display_name: "Team Weather Report (ENTSO-E)"
+    github_handles: [LaloMohamad, yanickfotsing]
+  - id: voltrion
+    display_name: "Voltrion"
+    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
+  - id: voltrion_entsoe
+    display_name: "Voltrion (ENTSO-E)"
+    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
