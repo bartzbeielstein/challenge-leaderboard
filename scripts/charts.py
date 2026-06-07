@@ -118,9 +118,12 @@ def fig_forecast_vs_actual(
 ) -> go.Figure | None:
     """Ist-Last + 24h-Prognose jedes Teams für einen wählbaren Zieltag.
 
-    Datumsauswahl per Plotly-``updatemenus``-Dropdown: alle verfügbaren
-    Tage werden vorgerendert, der Button schaltet die ``visible``-Maske um
-    (voll statische Seite, kein eigenes JS). Default sichtbar: jüngster Tag.
+    Alle verfügbaren Tage werden vorgerendert (Default sichtbar: jüngster
+    Tag). Die Datumsauswahl übernimmt ein Kalender-Widget im Template
+    (außerhalb der Plot-Fläche); die dafür nötigen Daten — sortierte
+    Tagesliste und Tag→Trace-Indizes — stehen deterministisch in
+    ``layout.meta`` (``days``, ``dayTraces``, ``titlePrefix``) und werden
+    clientseitig über die ``visible``-Maske geschaltet.
     None, wenn keine Actuals vorliegen oder kein Tag mit Submissions
     überlappt.
     """
@@ -155,9 +158,14 @@ def fig_forecast_vs_actual(
         idx += 1
         # ENTSO-E Day-ahead-Forecast als gestrichelte Referenzlinie (figure.py-
         # Stil: eigene Spur mit MAE in der Legende). Nur wenn vorhanden.
+        # MAE bevorzugt aus den Scores (Pseudo-Team ``entsoe``), damit
+        # Figur-Label und Leaderboard-Tabelle dieselbe Zahl zeigen;
+        # Fallback: inline aus den Tagesdaten.
         if "entsoe_forecast_mw" in a.columns and a["entsoe_forecast_mw"].notna().any():
             fc = a["entsoe_forecast_mw"]
-            mae = (fc - a["load_mw"]).abs().mean()
+            mae = mae_lookup.get(("entsoe", d))
+            if mae is None:
+                mae = (fc - a["load_mw"]).abs().mean()
             label = ("ENTSO-E Prognose"
                      + (f" · MAE {mae:.0f}" if pd.notna(mae) else ""))
             fig.add_trace(go.Scatter(
@@ -191,58 +199,110 @@ def fig_forecast_vs_actual(
     for i in day_trace_idx[default_day]:
         fig.data[i].visible = True
 
-    n = len(fig.data)
-    if len(days) > 1:
-        buttons = []
-        for d in days:
-            vis = [False] * n
-            for i in day_trace_idx[d]:
-                vis[i] = True
-            buttons.append(dict(
-                label=d, method="update",
-                args=[{"visible": vis},
-                      {"title": f"Prognose vs. Ist-Last — {d}"}],
-            ))
-        fig.update_layout(updatemenus=[dict(
-            buttons=buttons, direction="down", showactive=True,
-            x=1.0, xanchor="right", y=1.18, yanchor="top",
-            active=len(days) - 1,
-        )])
-
     _base_layout(fig, title=f"Prognose vs. Ist-Last — {default_day}",
                  yaxis_title="Last [MW]")
+    # Daten fürs Kalender-Widget im Template (CR-2: days sortiert,
+    # day_trace_idx in Einfüge- = Sortierreihenfolge).
+    fig.update_layout(meta=dict(
+        days=days,
+        dayTraces=day_trace_idx,
+        titlePrefix="Prognose vs. Ist-Last",
+    ))
     return fig
 
 
 # --------------------------------------------------------------------------
-# Chart 2: Mittlere MAE je Team (horizontales Balkendiagramm)
+# Chart 2: Mittlere MAE/RMSE je Team (horizontale Balkendiagramme)
 # --------------------------------------------------------------------------
+
+def _fig_mean_metric_bar(
+    board: pd.DataFrame, *, column: str, metric_label: str, title: str,
+    unit: str = "MW", fmt: str = "{:.0f}", best_at: float | None = None,
+) -> go.Figure | None:
+    """Horizontale Balken eines Mittelwerts je Team (bester oben, grün=gut).
+
+    ``best_at=None``: kleiner = besser (MAE/RMSE/MAPE) — aufsteigend
+    sortiert und gefärbt. ``best_at=x``: der Idealwert liegt bei ``x``
+    (Bias → 0, UPR → 50) — sortiert und gefärbt nach |Wert − x|, mit
+    Referenzlinie bei ``x``; die Balken selbst zeigen den signierten Wert.
+    """
+    if board is None or board.empty or column not in board.columns:
+        return None
+    b = board.copy()
+    # Sortier-/Farbschlüssel: Distanz zum Idealwert (bzw. der Wert selbst).
+    # kind="stable", damit Gleichstände die Board-Reihenfolge behalten
+    # (Determinismus, CR-2).
+    b["_key"] = (b[column] - best_at).abs() if best_at is not None \
+        else b[column]
+    b = b.sort_values("_key", ascending=True, na_position="last",
+                      kind="stable")
+    names = b["display_name"].tolist()
+    vals = b[column].astype(float).tolist()
+    keys = b["_key"].astype(float).tolist()
+    fig = go.Figure(go.Bar(
+        x=vals, y=names, orientation="h",
+        text=[fmt.format(v) for v in vals], textposition="auto",
+        marker=dict(
+            color=keys, colorscale="RdYlGn", reversescale=True,
+            line=dict(color="rgba(0,0,0,0.08)", width=1),
+            showscale=False,
+        ),
+        hovertemplate=("%{y}<br>Ø " + metric_label
+                       + " = %{x:.2f} " + unit + "<extra></extra>"),
+    ))
+    if best_at is not None:
+        fig.add_vline(x=best_at, line_width=1.5, line_dash="dot",
+                      line_color="#9aa1ab")
+    # Aufsteigend sortiert (bester zuerst) → reversed, damit der beste
+    # Balken oben steht.
+    fig.update_yaxes(autorange="reversed")
+    _base_layout(fig, title=title, yaxis_title="")
+    fig.update_layout(showlegend=False, hovermode="closest",
+                      xaxis_title=f"Ø {metric_label} [{unit}]")
+    return fig
+
 
 def fig_mean_mae_bar(
     board: pd.DataFrame, *, div_id: str = "fig-leaderboard"
 ) -> go.Figure | None:
     """Horizontale Balken der mittleren MAE je Team (Rang 1 oben, grün=gut)."""
-    if board is None or board.empty:
-        return None
-    names = board["display_name"].tolist()
-    mae = board["mean_mae"].astype(float).tolist()
-    fig = go.Figure(go.Bar(
-        x=mae, y=names, orientation="h",
-        text=[f"{v:.0f}" for v in mae], textposition="auto",
-        marker=dict(
-            color=mae, colorscale="RdYlGn", reversescale=True,
-            line=dict(color="rgba(0,0,0,0.08)", width=1),
-            showscale=False,
-        ),
-        hovertemplate="%{y}<br>Ø MAE = %{x:.1f} MW<extra></extra>",
-    ))
-    # board ist aufsteigend nach mean_mae (Rang 1 zuerst) → reversed, damit
-    # der beste Balken oben steht.
-    fig.update_yaxes(autorange="reversed")
-    _base_layout(fig, title="Mittlere MAE je Team", yaxis_title="")
-    fig.update_layout(showlegend=False, hovermode="closest",
-                      xaxis_title="Ø MAE [MW]")
-    return fig
+    return _fig_mean_metric_bar(board, column="mean_mae", metric_label="MAE",
+                                title="Mittlere MAE je Team")
+
+
+def fig_mean_rmse_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-rmse"
+) -> go.Figure | None:
+    """Horizontale Balken der mittleren RMSE je Team (beste oben, grün=gut)."""
+    return _fig_mean_metric_bar(board, column="mean_rmse", metric_label="RMSE",
+                                title="Mittlerer RMSE je Team")
+
+
+def fig_mean_mape_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-mape"
+) -> go.Figure | None:
+    """Horizontale Balken der mittleren MAPE je Team (beste oben, grün=gut)."""
+    return _fig_mean_metric_bar(board, column="mean_mape", metric_label="MAPE",
+                                title="Mittlere MAPE je Team",
+                                unit="%", fmt="{:.2f}")
+
+
+def fig_mean_bias_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-bias"
+) -> go.Figure | None:
+    """Signierte Bias-Balken je Team; bester = nächster an 0 (oben)."""
+    return _fig_mean_metric_bar(board, column="mean_bias", metric_label="Bias",
+                                title="Mittlerer Bias je Team",
+                                fmt="{:+.0f}", best_at=0.0)
+
+
+def fig_mean_upr_bar(
+    board: pd.DataFrame, *, div_id: str = "fig-leaderboard-upr"
+) -> go.Figure | None:
+    """UPR-Balken je Team; ausgewogen = nahe 50 % (oben, Referenzlinie)."""
+    return _fig_mean_metric_bar(board, column="mean_upr", metric_label="UPR",
+                                title="Mittlere UPR je Team",
+                                unit="%", fmt="{:.1f}", best_at=50.0)
 
 
 # --------------------------------------------------------------------------

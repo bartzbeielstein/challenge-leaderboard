@@ -350,7 +350,7 @@ Wenn alle Häkchen sitzen, ist die Challenge live.
 
 ---
 
-## Laufender Betrieb: Ist-Last-Daten für „Prognose vs. Ist-Last" nachziehen
+## Laufender Betrieb: Ist-Last-Daten für „Prognose vs. Ist-Last"
 
 Das Leaderboard zeigt neben der Tabelle die interaktive Plotly-Grafik
 **„Prognose vs. Ist-Last"** (`scripts/charts.py` →
@@ -360,22 +360,29 @@ gemessenen Netz-Ist-Load (*Actual Total Load* 6.1.A). Die **Ist-Last-Spur**
 stammt aus `data/actual_load.parquet` — einer **committeten** Zeitreihe,
 die der Pages-Build (`build_leaderboard.py`) **ohne API-Key** liest.
 
-**Warum ein lokaler Schritt?** Der `ENTSOE_API_KEY` steht als Repo-Secret
-nur dem `Daily Scoring`-Workflow zur Verfügung, **nicht** dem
-Build-/Deploy-Workflow (der bewusst keinen Key bekommt). `score_day.py`
-(CI) lädt den Ist-Load zwar, verwirft ihn aber nach der Metrik-Berechnung.
-Die Grafik braucht ihn jedoch **persistiert** — und dafür sorgt ein
-**lokaler** Lauf von `scripts/fetch_actuals.py` (gleiche, getestete
-Download-Logik wie das Scoring), dessen Ergebnis committet wird.
+Aus derselben Datei (Spalte `entsoe_forecast_mw`) leitet der Build auch
+die Scores des **Pseudo-Teams `entsoe`** ab (teams.yml: `pseudo: true`):
+es nimmt in allen Tabellen/Figuren am Ranking teil, exakt über den
+Zeitraum der regulären Teams, reicht aber keine CSVs ein —
+`validate_submission.py` lehnt Submissions für Pseudo-Teams ab,
+`score_day.py` schließt sie vom täglichen Scoring aus.
 
-> **Symptom, wenn dieser Schritt vergessen wird:** Tabelle und MAE springen
-> nach dem täglichen CI-Scoring auf den neuen Tag, aber die
-> „Prognose vs. Ist-Last"-Grafik bleibt am Vortag stehen — die committete
-> `data/actual_load.parquet` ist dann veraltet. Genau das war hier der
-> Grund; die ENTSO-E-Daten fehlten nicht, der lokale Refresh stand aus.
+**Seit 2026-06-04 vollautomatisch:** Der `Daily Scoring`-Workflow
+(`score-daily.yml`) führt nach dem Scoring zusätzlich
+`scripts/fetch_actuals.py --to <Zieltag>` aus (er hat den
+`ENTSOE_API_KEY` als Secret) und nimmt die aktualisierte
+`data/actual_load.parquet` mit in den täglichen Score-PR auf. Der
+Build-/Deploy-Workflow bleibt bewusst ohne API-Key. Ein lokaler
+Operator-Lauf ist im Normalbetrieb **nicht mehr nötig**.
 
-**1. Ist-Load lokal nachziehen** (`ENTSOE_API_KEY` muss in der Umgebung
-gesetzt sein):
+> **Historie:** Bis 2026-06-04 war dies ein manueller, lokaler Schritt.
+> Symptom, wenn er vergessen wurde: Tabelle und MAE sprangen nach dem
+> täglichen CI-Scoring auf den neuen Tag, aber die
+> „Prognose vs. Ist-Last"-Grafik blieb am Vortag stehen.
+
+**Fallback / Backfill (nur noch bei Bedarf,** z. B. ENTSO-E-Nachlieferung
+älterer Tage oder erzwungenes Neuladen; `ENTSOE_API_KEY` muss in der
+Umgebung gesetzt sein):
 
 ```sh
 # Alle relevanten Tage (aus Submissions + Scores abgeleitet, <= heute UTC).
@@ -391,15 +398,9 @@ uv run python scripts/fetch_actuals.py --from 2026-06-01 --to 2026-06-01
 uv run python scripts/fetch_actuals.py --force
 ```
 
-Kontrolle:
-
-```sh
-git status --short data/actual_load.parquet   # sollte als geändert auftauchen
-```
-
-**2. Commit + PR.** Der PR berührt keine `submissions/**`-Datei, daher
-nickt `validate-pr.yml` ihn pass-through ab; `auto-merge.yml` mergt ihn
-**bewusst nicht** automatisch — als Lehrende:r selbst (Admin) mergen:
+Anschließend Commit + PR; der PR berührt keine `submissions/**`-Datei,
+daher nickt `validate-pr.yml` ihn pass-through ab; `auto-merge.yml` mergt
+ihn **bewusst nicht** automatisch — als Lehrende:r selbst (Admin) mergen:
 
 ```sh
 # macOS:
@@ -411,7 +412,7 @@ gh pr create --fill --base main
 gh pr merge --squash --admin
 ```
 
-**3. Redeploy** passiert automatisch: Sobald `data/actual_load.parquet`
+**Redeploy** passiert automatisch: Sobald `data/actual_load.parquet`
 auf `main` landet, startet `build-and-deploy.yml` — die Datei steht in
 dessen `push`-`paths:`-Filter (neben `data/scores.parquet`, `teams.yml`,
 dem Template, `scripts/build_leaderboard.py` und `scripts/charts.py`).

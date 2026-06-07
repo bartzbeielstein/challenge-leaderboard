@@ -75,20 +75,36 @@ jobs:
         # LOCF nachzutragen.
         run: uv run python scripts/score_day.py --date "${{ steps.target.outputs.date }}" --catch-up 3
 
+      - name: Ist-Load für Charts nachziehen
+        # Hält data/actual_load.parquet (Basis der „Prognose vs. Ist-Last"-
+        # Grafik) automatisch aktuell — ersetzt den früheren lokalen
+        # Operator-Lauf von fetch_actuals.py (siehe DEPLOYMENT.md).
+        # Idempotent: vollständige Tage werden übersprungen, noch nicht
+        # publizierte aufgeschoben. --to <Zieltag> vermeidet sinnlose
+        # Retries auf den unvollständigen heutigen Tag.
+        # continue-on-error: Chart-Daten sind nice-to-have; der Score-PR
+        # darf an einem ENTSO-E-Schluckauf hier nicht scheitern.
+        continue-on-error: true
+        run: uv run python scripts/fetch_actuals.py --to "${{ steps.target.outputs.date }}"
+
       - name: Score-Stand-PR öffnen
         id: cpr
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
-          add-paths: data/scores.parquet
+          add-paths: |
+            data/scores.parquet
+            data/actual_load.parquet
           branch: bot/scores-${{ steps.target.outputs.date }}
           delete-branch: true
           commit-message: "score: Tageslauf ${{ steps.target.outputs.date }}"
           title: "score: Tageslauf ${{ steps.target.outputs.date }}"
           body: |
-            Automatisierter Score-Stand für den Zieltag **${{ steps.target.outputs.date }}**.
+            Automatisierter Score-Stand für den Zieltag **${{ steps.target.outputs.date }}**,
+            inkl. nachgezogener Ist-Load-Daten (`data/actual_load.parquet`) für die Charts.
 
-            Erzeugt von `.github/workflows/score-daily.yml` (`scripts/score_day.py`).
+            Erzeugt von `.github/workflows/score-daily.yml` (`scripts/score_day.py` +
+            `scripts/fetch_actuals.py`).
             `validate-pr.yml` nickt diesen PR pass-through ab (keine `submissions/**`-Änderungen);
             anschließend squasht `peter-evans/enable-pull-request-automerge` ihn nach `main`.
 

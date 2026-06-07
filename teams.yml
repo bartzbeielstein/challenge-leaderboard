@@ -4,11 +4,21 @@
 #     - id: <filename-safe, lowercase>     # erscheint im Pfad submissions/<id>/...
 #       display_name: <freier String>      # erscheint im Leaderboard
 #       github_handles: [<gh-handle>, ...] # darf PRs mergen
+#       pseudo: true                       # optional: Pseudo-Team ohne CSV-
+#                                          # Submissions; Scores werden zur
+#                                          # Build-Zeit direkt aus den
+#                                          # ENTSO-E-Daten abgeleitet
+#       model_card_link: <URL>             # optional: Link zur Model Card;
+#                                          # erzeugt eine Zeile in der Sektion
+#                                          # "About the Models" des Leaderboards
+#       software_link: <URL>               # optional: Link zum Reproduzierbar-
+#                                          # keits-ZIP (Spalte "Software" in
+#                                          # "About the Models")
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
 # Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
 # github_handles, display_name mit Zusatz "(ENTSO-E)"). Ausgenommen ist der
-# eigenständige ENTSO-E-Baseline-Eintrag `entsoe`.
+# eigenständige ENTSO-E-Pseudo-Eintrag `entsoe`.
 teams:
   - id: a_team
     display_name: "Das A Team"
@@ -31,18 +41,26 @@ teams:
   - id: team_4
     display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
   - id: team_4_optuna_entsoe
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+  # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
+  # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
+  # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
   - id: entsoe
-    display_name: "Entso-E"
-    github_handles: [bartzbeielstein]
+    display_name: "ENTSO-E"
+    pseudo: true
   - id: neura
     display_name: "Team Neura"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
@@ -85,9 +103,9 @@ teams:
   - id: team_weather_report_entsoe
     display_name: "Team Weather Report (ENTSO-E)"
     github_handles: [LaloMohamad, yanickfotsing]
-  - id: Voltrion
+  - id: voltrion
     display_name: "Voltrion"
-    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
-  - id: Voltrion_entsoe
+    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT, Malekuti, esmahxhj]
+  - id: voltrion_entsoe
     display_name: "Voltrion (ENTSO-E)"
-    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT]
+    github_handles: [Malakamz, RoyalKnighter, DarkReaperGT, Malekuti, esmahxhj]
