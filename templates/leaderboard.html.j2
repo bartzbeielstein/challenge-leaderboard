@@ -524,13 +524,16 @@
     <h2>About the Models</h2>
     <p class="meta">
       Model Cards dokumentieren Modellarchitektur, Trainingsdaten und
-      Limitationen der eingesetzten Prognosemodelle. Quelle:
-      <code>model_card_link</code> in <code>teams.yml</code>; Teams ohne
-      veröffentlichten Link sind mit ⚠️ markiert.
+      Limitationen der eingesetzten Prognosemodelle; Teams ohne
+      veröffentlichten Link sind mit ⚠️ markiert. <b>Software</b> verlinkt
+      das herunterladbare Reproduzierbarkeits-ZIP der Prognose-Software
+      (gepinnte Abhängigkeiten via <code>uv</code>, eingefrorene Daten,
+      Anleitung). Quelle: <code>model_card_link</code> bzw.
+      <code>software_link</code> in <code>teams.yml</code>.
     </p>
     <table>
       <thead>
-        <tr><th>Team</th><th>Model Card</th></tr>
+        <tr><th>Team</th><th>Model Card</th><th>Software</th></tr>
       </thead>
       <tbody>
       {% for mc in model_cards %}
@@ -540,6 +543,11 @@
           <td><a href="{{ mc.model_card_link }}">Model Card</a></td>
           {% else %}
           <td class="card-missing">⚠️ missing</td>
+          {% endif %}
+          {% if mc.software_link %}
+          <td><a href="{{ mc.software_link }}">ZIP</a></td>
+          {% else %}
+          <td class="status na">—</td>
           {% endif %}
         </tr>
       {% endfor %}

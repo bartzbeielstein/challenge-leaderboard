@@ -11,6 +11,9 @@
 #       model_card_link: <URL>             # optional: Link zur Model Card;
 #                                          # erzeugt eine Zeile in der Sektion
 #                                          # "About the Models" des Leaderboards
+#       software_link: <URL>               # optional: Link zum Reproduzierbar-
+#                                          # keits-ZIP (Spalte "Software" in
+#                                          # "About the Models")
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
 # Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
@@ -39,6 +42,7 @@ teams:
     display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]

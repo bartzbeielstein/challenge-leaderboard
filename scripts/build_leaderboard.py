@@ -43,16 +43,20 @@ def load_model_cards() -> list[dict[str, str | None]]:
     """Model-Card-Einträge für die Sektion „About the Models".
 
     Quelle ist ``teams.yml`` (Single Source of Truth): jedes reguläre Team
-    erhält eine Zeile (``display_name`` + Link), in Dateireihenfolge. Fehlt
+    erhält eine Zeile (``display_name`` + Links), in Dateireihenfolge. Fehlt
     der optionale Schlüssel ``model_card_link``, ist der Link ``None`` —
     das Template rendert dann „missing" mit Warn-Icon, damit sichtbar
-    bleibt, wer noch keine Model Card veröffentlicht hat. Pseudo-Teams
+    bleibt, wer noch keine Model Card veröffentlicht hat. Der optionale
+    Schlüssel ``software_link`` (Spalte „Software") verweist auf das
+    Reproduzierbarkeits-ZIP der Prognose-Software; ohne ihn rendert die
+    Spalte einen Strich (keine Warnung — freiwillige Angabe). Pseudo-Teams
     (z. B. ``entsoe``) submitten kein eigenes Modell und entfallen.
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return [
         {"display_name": t["display_name"],
-         "model_card_link": t.get("model_card_link")}
+         "model_card_link": t.get("model_card_link"),
+         "software_link": t.get("software_link")}
         for t in (data.get("teams") or []) if not t.get("pseudo", False)
     ]
 
