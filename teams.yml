@@ -8,6 +8,9 @@
 #                                          # Submissions; Scores werden zur
 #                                          # Build-Zeit direkt aus den
 #                                          # ENTSO-E-Daten abgeleitet
+#       model_card_link: <URL>             # optional: Link zur Model Card;
+#                                          # erzeugt eine Zeile in der Sektion
+#                                          # "About the Models" des Leaderboards
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
 # Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
@@ -35,15 +38,19 @@ teams:
   - id: team_4
     display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
   - id: team_4_optuna_entsoe
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
   # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
   # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
   # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.

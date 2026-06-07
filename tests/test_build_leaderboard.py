@@ -323,6 +323,62 @@ def test_main_omits_logo_when_absent(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# "About the Models" section — driven by `model_card_link` in teams.yml.
+# --------------------------------------------------------------------------
+
+def _seed_teams_with_model_card(tmp_path: Path, url: str):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "model_card_link": url},
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": []},   # no link -> no row
+        ]
+    }))
+
+
+def test_load_model_cards_lists_all_regular_teams(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    # One row per regular team, file order; missing link -> None.
+    assert bl.load_model_cards() == [
+        {"display_name": "Team 4", "model_card_link": url},
+        {"display_name": "Hot Rod", "model_card_link": None},
+    ]
+
+
+def test_load_model_cards_skips_pseudo_teams(tmp_path):
+    _seed_teams(tmp_path)  # includes pseudo team "ENTSO-E"
+    names = [mc["display_name"] for mc in bl.load_model_cards()]
+    assert "ENTSO-E" not in names
+    assert names == ["Team 4", "Hot Rod", "Team Neura"]
+
+
+def test_main_renders_model_cards_section(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "About the Models" in html
+    assert f'<a href="{url}">' in html
+    # Section appears below all metric sections, above the footer.
+    assert html.rindex("About the Models") > html.rindex("Leaderboard")
+    assert html.rindex("About the Models") < html.rindex("<footer>")
+
+
+def test_main_flags_teams_without_model_card(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    # Hot Rod has no link -> warning entry instead of an anchor.
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    assert '<td class="card-missing">⚠️ missing</td>' in section
+    assert section.count("<tr>") == 1 + 2  # header + one row per team
+
+
+# --------------------------------------------------------------------------
 # ENTSO-E day-ahead forecast as the ranked pseudo-team `entsoe`.
 # --------------------------------------------------------------------------
 

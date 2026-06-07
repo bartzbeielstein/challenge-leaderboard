@@ -64,6 +64,8 @@
     table.ranking tbody tr:first-child td:first-child::before { content: "🏆 "; }
     td.locf { color: #9aa1ab; }
     td.miss { color: #d0d4da; text-align: right; }
+    /* Fehlende Model Card in „About the Models". */
+    td.card-missing { color: #b54708; font-style: italic; }
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
@@ -501,6 +503,35 @@
     });
   })();
   </script>
+  {% endif %}
+
+  {% if model_cards %}
+  <section class="card">
+    <h2>About the Models</h2>
+    <p class="meta">
+      Model Cards dokumentieren Modellarchitektur, Trainingsdaten und
+      Limitationen der eingesetzten Prognosemodelle. Quelle:
+      <code>model_card_link</code> in <code>teams.yml</code>; Teams ohne
+      veröffentlichten Link sind mit ⚠️ markiert.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Team</th><th>Model Card</th></tr>
+      </thead>
+      <tbody>
+      {% for mc in model_cards %}
+        <tr>
+          <td>{{ mc.display_name }}</td>
+          {% if mc.model_card_link %}
+          <td><a href="{{ mc.model_card_link }}">Model Card</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
   {% endif %}
 
   <footer>

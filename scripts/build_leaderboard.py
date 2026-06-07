@@ -39,6 +39,24 @@ def load_teams() -> dict[str, str]:
     return {t["id"]: t["display_name"] for t in data.get("teams") or []}
 
 
+def load_model_cards() -> list[dict[str, str | None]]:
+    """Model-Card-Einträge für die Sektion „About the Models".
+
+    Quelle ist ``teams.yml`` (Single Source of Truth): jedes reguläre Team
+    erhält eine Zeile (``display_name`` + Link), in Dateireihenfolge. Fehlt
+    der optionale Schlüssel ``model_card_link``, ist der Link ``None`` —
+    das Template rendert dann „missing" mit Warn-Icon, damit sichtbar
+    bleibt, wer noch keine Model Card veröffentlicht hat. Pseudo-Teams
+    (z. B. ``entsoe``) submitten kein eigenes Modell und entfallen.
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return [
+        {"display_name": t["display_name"],
+         "model_card_link": t.get("model_card_link")}
+        for t in (data.get("teams") or []) if not t.get("pseudo", False)
+    ]
+
+
 def load_pseudo_ids() -> set[str]:
     """Ids der Pseudo-Teams (``pseudo: true`` in teams.yml).
 
@@ -294,6 +312,7 @@ def load_logo_uri(path: Path) -> str:
 
 def render(
     board: pd.DataFrame, daily: dict, figs: dict[str, str], logo_uri: str = "",
+    model_cards: list[dict[str, str]] | None = None,
 ) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
@@ -313,6 +332,7 @@ def render(
         figs=figs,
         plotlyjs=plotlyjs,
         logo_uri=logo_uri,
+        model_cards=model_cards or [],
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
@@ -349,7 +369,7 @@ def main() -> None:
     daily = daily_breakdown(scores, names, list(board["team_id"]))
     figs = build_figures(board, daily, scores, names, actuals)
     logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
-    render(board, daily, figs, logo_uri)
+    render(board, daily, figs, logo_uri, load_model_cards())
     print(f"[build] Leaderboard mit {len(board)} Teams "
           f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 
