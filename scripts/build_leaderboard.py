@@ -57,6 +57,23 @@ def load_model_cards() -> list[dict[str, str | None]]:
     ]
 
 
+def load_model_card_status() -> dict[str, bool | None]:
+    """Model-Card-Status je Team für die Status-Spalte im Leaderboard.
+
+    Gleiche Quelle wie die Sektion „About the Models" (``model_card_link``
+    in ``teams.yml``) — beide bleiben damit automatisch synchron. ``True``
+    = Link veröffentlicht (grüner Haken), ``False`` = fehlt (Warn-Icon),
+    ``None`` für Pseudo-Teams (kein eigenes Modell → Strich statt
+    Warnung).
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return {
+        t["id"]: (None if t.get("pseudo", False)
+                  else bool(t.get("model_card_link")))
+        for t in (data.get("teams") or [])
+    }
+
+
 def load_pseudo_ids() -> set[str]:
     """Ids der Pseudo-Teams (``pseudo: true`` in teams.yml).
 
@@ -313,6 +330,7 @@ def load_logo_uri(path: Path) -> str:
 def render(
     board: pd.DataFrame, daily: dict, figs: dict[str, str], logo_uri: str = "",
     model_cards: list[dict[str, str]] | None = None,
+    model_card_status: dict[str, bool | None] | None = None,
 ) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
@@ -326,6 +344,11 @@ def render(
     # gerendert wird (leeres Leaderboard → keine Charts → kein Bundle).
     plotlyjs = get_plotlyjs() if any(figs.values()) else ""
     rows = annotate_leaderboard_best(board.to_dict(orient="records"))
+    # Status-Spalte: Model Card vorhanden? Gleiche Quelle wie „About the
+    # Models" (teams.yml) — None für Pseudo-Teams und unbekannte Ids.
+    status = model_card_status or {}
+    for r in rows:
+        r["model_card_status"] = status.get(r["team_id"])
     html = template.render(
         rows=rows,
         daily=daily,
@@ -369,7 +392,8 @@ def main() -> None:
     daily = daily_breakdown(scores, names, list(board["team_id"]))
     figs = build_figures(board, daily, scores, names, actuals)
     logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
-    render(board, daily, figs, logo_uri, load_model_cards())
+    render(board, daily, figs, logo_uri, load_model_cards(),
+           load_model_card_status())
     print(f"[build] Leaderboard mit {len(board)} Teams "
           f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 

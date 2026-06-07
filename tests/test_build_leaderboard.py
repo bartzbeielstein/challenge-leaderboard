@@ -379,6 +379,65 @@ def test_main_flags_teams_without_model_card(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# Leaderboard "Status" column — same source as "About the Models".
+# --------------------------------------------------------------------------
+
+def test_load_model_card_status_true_false_none(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    assert bl.load_model_card_status() == {"team_4": True, "hot_rod": False}
+
+
+def test_load_model_card_status_pseudo_is_none(tmp_path):
+    _seed_teams(tmp_path)  # includes pseudo team "entsoe"
+    status = bl.load_model_card_status()
+    assert status["entsoe"] is None
+    assert status["team_4"] is False
+
+
+def test_main_leaderboard_status_column(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1},
+        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2},
+    ])
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    table = html[html.index('<table class="ranking">'):]
+    table = table[:table.index("</table>")]
+    # Header: Status sits between Team and Mean MAE.
+    head = table[:table.index("</thead>")]
+    assert head.index(">Team<") < head.index(">Status<") < head.index("Mean MAE")
+    # Team 4 has a model_card_link -> check mark; Hot Rod lacks one -> warning.
+    row4 = table[table.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert "✅" in row4 and "⚠️" not in row4
+    rowhr = table[table.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert "⚠️" in rowhr and "✅" not in rowhr
+
+
+def test_main_leaderboard_status_dash_for_pseudo(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")        # ranks the pseudo-team
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    table = html[html.index('<table class="ranking">'):]
+    table = table[:table.index("</table>")]
+    row = table[table.index("<td>ENTSO-E</td>"):]
+    row = row[:row.index("</tr>")]
+    assert '<td class="status na"' in row     # dash, not a warning
+    assert "⚠️" not in row and "✅" not in row
+
+
+# --------------------------------------------------------------------------
 # ENTSO-E day-ahead forecast as the ranked pseudo-team `entsoe`.
 # --------------------------------------------------------------------------
 

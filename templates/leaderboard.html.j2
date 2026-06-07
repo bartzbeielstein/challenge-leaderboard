@@ -66,6 +66,9 @@
     td.miss { color: #d0d4da; text-align: right; }
     /* Fehlende Model Card in „About the Models". */
     td.card-missing { color: #b54708; font-style: italic; }
+    /* Status-Spalte im Leaderboard (Model Card vorhanden?). */
+    th.status, td.status { text-align: center; }
+    td.status.na { color: #d0d4da; }
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
@@ -153,6 +156,7 @@
       <thead>
         <tr>
           <th>#</th><th>Team</th>
+          <th class="status" title="Model Card veröffentlicht? Quelle: model_card_link in teams.yml (s. „About the Models")">Status</th>
           <th class="num">Mean MAE [MW]</th>
           <th class="num">Mean RMSE [MW]</th>
           <th class="num">Mean MAPE [%]</th>
@@ -166,6 +170,13 @@
         <tr>
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
+          {% if row.model_card_status %}
+          <td class="status" title="Model Card veröffentlicht">✅</td>
+          {% elif row.model_card_status is sameas false %}
+          <td class="status" title="Model Card fehlt (s. „About the Models")">⚠️</td>
+          {% else %}
+          <td class="status na" title="Pseudo-Team — kein eigenes Modell">—</td>
+          {% endif %}
           <td class="num{{ ' best' if row.best_mae else '' }}">{{ "%.2f"|format(row.mean_mae) }}</td>
           <td class="num{{ ' best' if row.best_rmse else '' }}">{{ "%.2f"|format(row.mean_rmse) }}</td>
           <td class="num{{ ' best' if row.best_mape else '' }}">{{ "%.2f"|format(row.mean_mape) }}</td>
@@ -177,7 +188,10 @@
       </tbody>
     </table>
     <p class="meta">
-      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Fett</b> markiert
+      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Status</b>:
+      ✅ = Model Card veröffentlicht, ⚠️ = fehlt — gleiche Quelle wie die
+      Sektion „About the Models" (<code>model_card_link</code> in
+      <code>teams.yml</code>). <b>Fett</b> markiert
       den besten Wert jeder Spalte: Minimum bei MAE/RMSE/MAPE, am nächsten
       an 0 beim Bias, am nächsten an 50&nbsp;% bei der UPR, Maximum bei den
       bewerteten Tagen. <b>Bias</b> =
