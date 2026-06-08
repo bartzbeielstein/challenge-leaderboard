@@ -49,22 +49,22 @@ teams:
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
-    group: "None"
+    group: "-"
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
-    group: "None"
+    group: "-"
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
-    group: "None"
+    group: "-"
   - id: team_4_optuna_entsoe
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
-    group: "None"
+    group: "-"
   # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
   # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
   # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
