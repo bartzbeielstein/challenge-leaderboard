@@ -347,9 +347,9 @@ def test_load_model_cards_lists_all_regular_teams(tmp_path):
     # One row per regular team, file order; missing links -> None.
     assert bl.load_model_cards() == [
         {"display_name": "Team 4", "model_card_link": url,
-         "software_link": ZIP_URL},
+         "software_link": ZIP_URL, "certified": None},
         {"display_name": "Hot Rod", "model_card_link": None,
-         "software_link": None},
+         "software_link": None, "certified": None},
     ]
 
 
@@ -403,6 +403,59 @@ def test_main_renders_software_column(tmp_path):
     assert ZIP_URL not in rowhr
     assert '<td class="status na">—</td>' in rowhr
     assert rowhr.count("⚠️") == 1  # only the Model-Card warning
+
+
+def _seed_teams_with_certified(tmp_path: Path):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "certified": "Yes"},
+            {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": [],
+             "certified": "No"},
+            {"id": "neura", "display_name": "Team Neura",
+             "github_handles": []},   # certified key absent
+        ]
+    }))
+
+
+def test_main_renders_certified_column(tmp_path):
+    _seed_teams_with_certified(tmp_path)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    # Column order: Certified sits after Software.
+    head = section[section.index("<thead>"):section.index("</thead>")]
+    assert head.index(">Software<") < head.index(">Certified<")
+    # "Yes" -> check mark; "No" and missing -> dash, never a check mark.
+    row4 = section[section.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert "✅" in row4
+    rowhr = section[section.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert "✅" not in rowhr and '<td class="status na"' in rowhr
+    rown = section[section.index("<td>Team Neura</td>"):]
+    rown = rown[:rown.index("</tr>")]
+    assert "✅" not in rown and '<td class="status na"' in rown
+
+
+def test_main_emits_certificate_template(tmp_path):
+    # The build copies templates/Certificate.md verbatim into public/ so the
+    # "About the Models" footnote can link to ./Certificate.md.
+    _seed_teams_with_certified(tmp_path)
+    bl.main()
+    published = tmp_path / "public" / "Certificate.md"
+    assert published.exists()
+    source = bl.TEMPLATE_DIR / "Certificate.md"
+    assert published.read_text() == source.read_text()
+
+
+def test_about_the_models_links_certificate(tmp_path):
+    _seed_teams_with_certified(tmp_path)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    assert 'href="./Certificate.md"' in section
 
 
 # --------------------------------------------------------------------------

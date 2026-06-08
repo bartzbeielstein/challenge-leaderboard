@@ -532,10 +532,16 @@
       (gepinnte Abhängigkeiten via <code>uv</code>, eingefrorene Daten,
       Anleitung). Quelle: <code>model_card_link</code> bzw.
       <code>software_link</code> in <code>teams.yml</code>.
+      <b>Reproduktion zertifizieren:</b> Prüfteams laden die
+      <a href="./Certificate.md">Reproduktions-Zertifikat-Vorlage</a> herunter,
+      füllen sie aus, kompilieren sie zu PDF und senden sie an den Veranstalter
+      (<code>thomas.bartz-beielstein@th-koeln.de</code>); die Spalte
+      <b>Certified</b> zeigt anschließend ✅ (Schlüssel <code>certified</code>
+      in <code>teams.yml</code>).
     </p>
     <table>
       <thead>
-        <tr><th>Team</th><th>Model Card</th><th>Software</th></tr>
+        <tr><th>Team</th><th>Model Card</th><th>Software</th><th class="status">Certified</th></tr>
       </thead>
       <tbody>
       {% for mc in model_cards %}
@@ -550,6 +556,11 @@
           <td><a href="{{ mc.software_link }}">ZIP</a></td>
           {% else %}
           <td class="status na">—</td>
+          {% endif %}
+          {% if mc.certified == "Yes" %}
+          <td class="status" title="Reproduktion zertifiziert">✅</td>
+          {% else %}
+          <td class="status na" title="Noch nicht zertifiziert">—</td>
           {% endif %}
         </tr>
       {% endfor %}

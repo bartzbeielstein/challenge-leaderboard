@@ -60,14 +60,18 @@ def load_model_cards() -> list[dict[str, str | None]]:
     bleibt, wer noch keine Model Card veröffentlicht hat. Der optionale
     Schlüssel ``software_link`` (Spalte „Software") verweist auf das
     Reproduzierbarkeits-ZIP der Prognose-Software; ohne ihn rendert die
-    Spalte einen Strich (keine Warnung — freiwillige Angabe). Pseudo-Teams
-    (z. B. ``entsoe``) submitten kein eigenes Modell und entfallen.
+    Spalte einen Strich (keine Warnung — freiwillige Angabe). Der optionale
+    Schlüssel ``certified`` (Spalte „Certified") trägt den vom Veranstalter
+    gepflegten Reproduktions-Status: ``"Yes"`` → ✅, sonst (``"No"``/fehlt)
+    ein Strich. Pseudo-Teams (z. B. ``entsoe``) submitten kein eigenes
+    Modell und entfallen.
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return [
         {"display_name": t["display_name"],
          "model_card_link": t.get("model_card_link"),
-         "software_link": t.get("software_link")}
+         "software_link": t.get("software_link"),
+         "certified": t.get("certified")}
         for t in (data.get("teams") or []) if not t.get("pseudo", False)
     ]
 
@@ -377,6 +381,13 @@ def render(
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
+    # Reproduktions-Zertifikat-Vorlage zum Download bereitstellen: die
+    # Markdown-Vorlage 1:1 nach public/ kopieren (von „About the Models" via
+    # ./Certificate.md verlinkt). Fehlt sie, wird der Schritt übersprungen —
+    # Graceful Degradation wie bei load_logo_uri().
+    cert_src = TEMPLATE_DIR / "Certificate.md"
+    if cert_src.exists():
+        (PUBLIC_DIR / "Certificate.md").write_text(cert_src.read_text())
     (PUBLIC_DIR / "data" / "scores.json").write_text(
         json.dumps(rows, indent=2, default=str)
     )
