@@ -401,7 +401,7 @@ def test_main_renders_software_column(tmp_path):
     rowhr = section[section.index("<td>Hot Rod</td>"):]
     rowhr = rowhr[:rowhr.index("</tr>")]
     assert ZIP_URL not in rowhr
-    assert '<td class="status na">—</td>' in rowhr
+    assert '<td class="software na">—</td>' in rowhr
     assert rowhr.count("⚠️") == 1  # only the Model-Card warning
 
 

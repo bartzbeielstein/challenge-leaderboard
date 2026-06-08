@@ -48,8 +48,7 @@ Signature: ______________________________
 1. Fill in **every** `[...]` placeholder above.
 2. **Compile this Markdown file to a PDF** (e.g. via your editor, `pandoc`, or a
    Markdown-to-PDF tool).
-3. **Email the PDF** to **Prof. Dr. T. Bartz-Beielstein**
-   (<thomas.bartz-beielstein@th-koeln.de>), who organizes the challenge.
+3. **Email the PDF** to the challenge organizer, **Prof. Dr. Bartz-Beielstein**.
 
 The organizer verifies the certificate and then sets `certified: "Yes"` for
 Team A in `teams.yml`; the leaderboard's *About the Models* table then shows a

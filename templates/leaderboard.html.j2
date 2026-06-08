@@ -69,6 +69,9 @@
     /* Status-Spalte im Leaderboard (Model Card vorhanden?). */
     th.status, td.status { text-align: center; }
     td.status.na { color: #d0d4da; }
+    /* Software-Spalte in „About the Models": ZIP-Link und Strich rechtsbündig. */
+    th.software, td.software { text-align: right; }
+    td.software.na { color: #d0d4da; }
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
@@ -535,13 +538,13 @@
       <b>Reproduktion zertifizieren:</b> Prüfteams laden die
       <a href="./Certificate.md">Reproduktions-Zertifikat-Vorlage</a> herunter,
       füllen sie aus, kompilieren sie zu PDF und senden sie an den Veranstalter
-      (<code>thomas.bartz-beielstein@th-koeln.de</code>); die Spalte
+      Prof. Dr. Bartz-Beielstein; die Spalte
       <b>Certified</b> zeigt anschließend ✅ (Schlüssel <code>certified</code>
       in <code>teams.yml</code>).
     </p>
     <table>
       <thead>
-        <tr><th>Team</th><th>Model Card</th><th>Software</th><th class="status">Certified</th></tr>
+        <tr><th>Team</th><th>Model Card</th><th class="software">Software</th><th class="status">Certified</th></tr>
       </thead>
       <tbody>
       {% for mc in model_cards %}
@@ -553,9 +556,9 @@
           <td class="card-missing">⚠️ missing</td>
           {% endif %}
           {% if mc.software_link %}
-          <td><a href="{{ mc.software_link }}">ZIP</a></td>
+          <td class="software"><a href="{{ mc.software_link }}">ZIP</a></td>
           {% else %}
-          <td class="status na">—</td>
+          <td class="software na">—</td>
           {% endif %}
           {% if mc.certified == "Yes" %}
           <td class="status" title="Reproduktion zertifiziert">✅</td>
