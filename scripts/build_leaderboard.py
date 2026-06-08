@@ -39,6 +39,17 @@ def load_teams() -> dict[str, str]:
     return {t["id"]: t["display_name"] for t in data.get("teams") or []}
 
 
+def load_groups() -> dict[str, str]:
+    """Mapping team_id -> Gruppenkürzel (Schlüssel ``group`` in teams.yml).
+
+    Der Schlüssel ist optional; Teams ohne ``group`` (und Pseudo-Teams)
+    erscheinen nicht im Mapping → die Leaderboard-Spalte zeigt einen Strich.
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return {t["id"]: t["group"]
+            for t in (data.get("teams") or []) if t.get("group")}
+
+
 def load_model_cards() -> list[dict[str, str | None]]:
     """Model-Card-Einträge für die Sektion „About the Models".
 
@@ -335,6 +346,7 @@ def render(
     board: pd.DataFrame, daily: dict, figs: dict[str, str], logo_uri: str = "",
     model_cards: list[dict[str, str]] | None = None,
     model_card_status: dict[str, bool | None] | None = None,
+    groups: dict[str, str] | None = None,
 ) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
@@ -351,8 +363,10 @@ def render(
     # Status-Spalte: Model Card vorhanden? Gleiche Quelle wie „About the
     # Models" (teams.yml) — None für Pseudo-Teams und unbekannte Ids.
     status = model_card_status or {}
+    grp = groups or {}
     for r in rows:
         r["model_card_status"] = status.get(r["team_id"])
+        r["group"] = grp.get(r["team_id"])
     html = template.render(
         rows=rows,
         daily=daily,
@@ -397,7 +411,7 @@ def main() -> None:
     figs = build_figures(board, daily, scores, names, actuals)
     logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
     render(board, daily, figs, logo_uri, load_model_cards(),
-           load_model_card_status())
+           load_model_card_status(), load_groups())
     print(f"[build] Leaderboard mit {len(board)} Teams "
           f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
 

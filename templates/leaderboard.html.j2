@@ -156,6 +156,7 @@
       <thead>
         <tr>
           <th>#</th><th>Team</th>
+          <th title="Gruppe laut group-Schlüssel in teams.yml">Group</th>
           <th class="status" title="Model Card veröffentlicht? Quelle: model_card_link in teams.yml (s. „About the Models")">Status</th>
           <th class="num">Mean MAE [MW]</th>
           <th class="num">Mean RMSE [MW]</th>
@@ -170,6 +171,7 @@
         <tr>
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
+          <td>{{ row.group if row.group else "—" }}</td>
           {% if row.model_card_status %}
           <td class="status" title="Model Card veröffentlicht">✅</td>
           {% elif row.model_card_status is sameas false %}

@@ -23,38 +23,48 @@ teams:
   - id: a_team
     display_name: "Das A Team"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
+    group: "ING" 
   - id: a_team_entsoe
     display_name: "Das A Team (ENTSO-E)"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
+    group: "ING" 
   - id: syntaxerror
     display_name: "Syntaxerror"
     github_handles: [lriethk, timhaeger,linus-thk]
+    group: "ING" 
   - id: syntaxerror_entsoe
     display_name: "Syntaxerror (ENTSO-E)"
     github_handles: [lriethk, timhaeger,linus-thk]
+    group: "ING"
   - id: team_fabinalii
     display_name: "Team Fabinalii"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
+    group: "ING"
   - id: team_fabinalii_entsoe
     display_name: "Team Fabinalii (ENTSO-E)"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
+    group: "ING"
   - id: team_4
     display_name: "Team 4 SpotOptim"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
+    group: "None"
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    group: "None"
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    group: "None"
   - id: team_4_optuna_entsoe
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    group: "None"
   # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
   # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
   # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
@@ -64,48 +74,64 @@ teams:
   - id: neura
     display_name: "Team Neura"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
+    group: "AIT"
   - id: neura_entsoe
     display_name: "Team Neura (ENTSO-E)"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
+    group: "AIT"
   - id: hot_rod
     display_name: "Hot Rod"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
+    group: "AIT"
   - id: hot_rod_entsoe
     display_name: "Hot Rod (ENTSO-E)"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
+    group: "AIT"
   - id: ddkast
     display_name: "DDKAST"
     github_handles: [bachmak, KareemYassen, INDYROD]
+    group: "AIT"
   - id: ddkast_entsoe
     display_name: "DDKAST (ENTSO-E)"
     github_handles: [bachmak, KareemYassen, INDYROD]
+    group: "AIT"
   - id: eigen_squad
     display_name: "Eigen-Squad"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
+    group: "AIT"
   - id: eigen_squad_entsoe
     display_name: "Eigen-Squad (ENTSO-E)"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
+    group: "AIT"
   - id: team_gladiators
     display_name: "Team Gladiators"
     github_handles: [gauravlokhande1100-prog]
+    group: "AIT"
   - id: team_gladiators_entsoe
     display_name: "Team Gladiators (ENTSO-E)"
     github_handles: [gauravlokhande1100-prog]
+    group: "AIT"
   - id: team_immerzuspaet
     display_name: "Team ImmerZuSpaet"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
+    group: "ING"
   - id: team_immerzuspaet_entsoe
     display_name: "Team ImmerZuSpaet (ENTSO-E)"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
+    group: "ING"
   - id: team_weather_report
     display_name: "Team Weather Report"
     github_handles: [LaloMohamad, yanickfotsing]
+    group: "ING"
   - id: team_weather_report_entsoe
     display_name: "Team Weather Report (ENTSO-E)"
     github_handles: [LaloMohamad, yanickfotsing]
+    group: "ING"
   - id: voltrion
     display_name: "Voltrion"
     github_handles: [Malakamz, RoyalKnighter, DarkReaperGT, Malekuti, esmahxhj]
+    group: "ING"
   - id: voltrion_entsoe
     display_name: "Voltrion (ENTSO-E)"
     github_handles: [Malakamz, RoyalKnighter, DarkReaperGT, Malekuti, esmahxhj]
+    group: "ING"
