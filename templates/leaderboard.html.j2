@@ -69,6 +69,9 @@
     /* Status-Spalte im Leaderboard (Model Card vorhanden?). */
     th.status, td.status { text-align: center; }
     td.status.na { color: #d0d4da; }
+    /* Software-Spalte in „About the Models": ZIP-Link und Strich rechtsbündig. */
+    th.software, td.software { text-align: right; }
+    td.software.na { color: #d0d4da; }
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
@@ -156,6 +159,7 @@
       <thead>
         <tr>
           <th>#</th><th>Team</th>
+          <th title="Gruppe laut group-Schlüssel in teams.yml">Group</th>
           <th class="status" title="Model Card veröffentlicht? Quelle: model_card_link in teams.yml (s. „About the Models")">Status</th>
           <th class="num">Mean MAE [MW]</th>
           <th class="num">Mean RMSE [MW]</th>
@@ -170,6 +174,7 @@
         <tr>
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
+          <td>{{ row.group if row.group else "—" }}</td>
           {% if row.model_card_status %}
           <td class="status" title="Model Card veröffentlicht">✅</td>
           {% elif row.model_card_status is sameas false %}
@@ -530,10 +535,16 @@
       (gepinnte Abhängigkeiten via <code>uv</code>, eingefrorene Daten,
       Anleitung). Quelle: <code>model_card_link</code> bzw.
       <code>software_link</code> in <code>teams.yml</code>.
+      <b>Reproduktion zertifizieren:</b> Prüfteams laden die
+      <a href="./Certificate.md">Reproduktions-Zertifikat-Vorlage</a> herunter,
+      füllen sie aus, kompilieren sie zu PDF und senden sie an den Veranstalter
+      Prof. Dr. Bartz-Beielstein; die Spalte
+      <b>Certified</b> zeigt anschließend ✅ (Schlüssel <code>certified</code>
+      in <code>teams.yml</code>).
     </p>
     <table>
       <thead>
-        <tr><th>Team</th><th>Model Card</th><th>Software</th></tr>
+        <tr><th>Team</th><th>Model Card</th><th class="software">Software</th><th class="status">Certified</th><th>OpenSSF</th></tr>
       </thead>
       <tbody>
       {% for mc in model_cards %}
@@ -545,9 +556,19 @@
           <td class="card-missing">⚠️ missing</td>
           {% endif %}
           {% if mc.software_link %}
-          <td><a href="{{ mc.software_link }}">ZIP</a></td>
+          <td class="software"><a href="{{ mc.software_link }}">ZIP</a></td>
           {% else %}
-          <td class="status na">—</td>
+          <td class="software na">—</td>
+          {% endif %}
+          {% if mc.certified == "Yes" %}
+          <td class="status" title="Reproduktion zertifiziert">✅</td>
+          {% else %}
+          <td class="status na" title="Noch nicht zertifiziert">—</td>
+          {% endif %}
+          {% if mc.openssf %}
+          <td><a href="{{ mc.openssf }}">OpenSSF Scorecard</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
           {% endif %}
         </tr>
       {% endfor %}
