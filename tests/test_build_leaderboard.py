@@ -347,9 +347,9 @@ def test_load_model_cards_lists_all_regular_teams(tmp_path):
     # One row per regular team, file order; missing links -> None.
     assert bl.load_model_cards() == [
         {"display_name": "Team 4", "model_card_link": url,
-         "software_link": ZIP_URL, "certified": None},
+         "software_link": ZIP_URL, "certified": None, "openssf": None},
         {"display_name": "Hot Rod", "model_card_link": None,
-         "software_link": None, "certified": None},
+         "software_link": None, "certified": None, "openssf": None},
     ]
 
 
@@ -402,7 +402,9 @@ def test_main_renders_software_column(tmp_path):
     rowhr = rowhr[:rowhr.index("</tr>")]
     assert ZIP_URL not in rowhr
     assert '<td class="software na">—</td>' in rowhr
-    assert rowhr.count("⚠️") == 1  # only the Model-Card warning
+    # Software adds no warning; the row's warnings come from the missing
+    # Model Card and the missing OpenSSF scorecard.
+    assert rowhr.count("⚠️") == 2
 
 
 def _seed_teams_with_certified(tmp_path: Path):
@@ -437,6 +439,33 @@ def test_main_renders_certified_column(tmp_path):
     rown = section[section.index("<td>Team Neura</td>"):]
     rown = rown[:rown.index("</tr>")]
     assert "✅" not in rown and '<td class="status na"' in rown
+
+
+def test_main_renders_openssf_column(tmp_path):
+    import yaml
+    scorecard = "https://scorecard.dev/viewer/?uri=github.com/x/y"
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "openssf": scorecard},
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": []},   # no openssf -> missing + warning
+        ]
+    }))
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    # OpenSSF column sits after Certified.
+    head = section[section.index("<thead>"):section.index("</thead>")]
+    assert head.index(">Certified<") < head.index(">OpenSSF<")
+    # Team 4 has a scorecard link; Hot Rod -> missing warning.
+    row4 = section[section.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert f'<a href="{scorecard}">' in row4
+    rowhr = section[section.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert scorecard not in rowhr
+    assert '<td class="card-missing">⚠️ missing</td>' in rowhr
 
 
 def test_main_emits_certificate_template(tmp_path):

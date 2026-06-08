@@ -22,6 +22,10 @@
 #                                          # Eingang eines Zertifikat-PDFs
 #                                          # (Spalte "Certified" in "About the
 #                                          # Models"): "Yes" -> Haken, sonst Strich
+#       openssf: <URL>                     # optional: Link zur OpenSSF-Scorecard
+#                                          # (Spalte "OpenSSF" in "About the
+#                                          # Models"); ohne ihn "missing" + Warn-
+#                                          # Icon (analog zur Model Card)
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
 # Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
@@ -32,7 +36,7 @@ teams:
     display_name: "Das A Team"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
     group: "ING"
-    certified: "No" 
+    certified: "No"
   - id: a_team_entsoe
     display_name: "Das A Team (ENTSO-E)"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
@@ -65,6 +69,7 @@ teams:
     software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
     group: "--"
     certified: "No"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]

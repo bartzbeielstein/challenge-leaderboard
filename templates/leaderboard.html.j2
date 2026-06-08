@@ -544,7 +544,7 @@
     </p>
     <table>
       <thead>
-        <tr><th>Team</th><th>Model Card</th><th class="software">Software</th><th class="status">Certified</th></tr>
+        <tr><th>Team</th><th>Model Card</th><th class="software">Software</th><th class="status">Certified</th><th>OpenSSF</th></tr>
       </thead>
       <tbody>
       {% for mc in model_cards %}
@@ -564,6 +564,11 @@
           <td class="status" title="Reproduktion zertifiziert">✅</td>
           {% else %}
           <td class="status na" title="Noch nicht zertifiziert">—</td>
+          {% endif %}
+          {% if mc.openssf %}
+          <td><a href="{{ mc.openssf }}">OpenSSF Scorecard</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
           {% endif %}
         </tr>
       {% endfor %}

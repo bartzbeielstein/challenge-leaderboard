@@ -63,15 +63,18 @@ def load_model_cards() -> list[dict[str, str | None]]:
     Spalte einen Strich (keine Warnung — freiwillige Angabe). Der optionale
     Schlüssel ``certified`` (Spalte „Certified") trägt den vom Veranstalter
     gepflegten Reproduktions-Status: ``"Yes"`` → ✅, sonst (``"No"``/fehlt)
-    ein Strich. Pseudo-Teams (z. B. ``entsoe``) submitten kein eigenes
-    Modell und entfallen.
+    ein Strich. Der optionale Schlüssel ``openssf`` (Spalte „OPENSSF")
+    verlinkt die OpenSSF-Scorecard; fehlt er, rendert die Spalte „missing"
+    mit Warn-Icon (analog zur Model Card). Pseudo-Teams (z. B. ``entsoe``)
+    submitten kein eigenes Modell und entfallen.
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return [
         {"display_name": t["display_name"],
          "model_card_link": t.get("model_card_link"),
          "software_link": t.get("software_link"),
-         "certified": t.get("certified")}
+         "certified": t.get("certified"),
+         "openssf": t.get("openssf")}
         for t in (data.get("teams") or []) if not t.get("pseudo", False)
     ]
 
