@@ -104,3 +104,12 @@ def test_authorship_wrong_user(teams_yml):
 def test_authorship_correct_user_case_insensitive(teams_yml):
     teams = vs.load_teams(teams_yml)
     vs.validate_authorship("team_4", "BartzBeielstein", teams)
+
+
+def test_authorship_rejects_pseudo_team(teams_yml):
+    # Pseudo teams (entsoe) are fed directly from the ENTSO-E data at build
+    # time — CSV submissions must be rejected for ANY author.
+    teams = vs.load_teams(teams_yml)
+    with pytest.raises(SystemExit) as ei:
+        vs.validate_authorship("entsoe", "bartzbeielstein", teams)
+    assert ei.value.code == 3

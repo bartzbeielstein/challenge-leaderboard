@@ -46,11 +46,17 @@ def _scores() -> pd.DataFrame:
 
 
 def _board() -> pd.DataFrame:
+    # hot_rod hat die bessere RMSE trotz schlechterer MAE — so testet der
+    # RMSE-Balken seine eigene Sortierung. Bias/UPR: hot_rod hat den
+    # kleineren Rohwert, team_4 liegt aber näher am Idealwert (0 bzw. 50) —
+    # so wird die Idealwert-Sortierung gegen die Rohwert-Ordnung getestet.
     return pd.DataFrame([
         {"rank": 1, "team_id": "team_4", "display_name": "Team 4",
-         "mean_mae": 125.0, "sum_mae": 250.0, "n_submissions": 2},
+         "mean_mae": 125.0, "mean_rmse": 290.0, "mean_mape": 2.5,
+         "mean_bias": 40.0, "mean_upr": 58.0, "n_submissions": 2},
         {"rank": 2, "team_id": "hot_rod", "display_name": "Hot Rod",
-         "mean_mae": 200.0, "sum_mae": 200.0, "n_submissions": 1},
+         "mean_mae": 200.0, "mean_rmse": 240.0, "mean_mape": 4.0,
+         "mean_bias": -90.0, "mean_upr": 20.0, "n_submissions": 1},
     ])
 
 
@@ -154,20 +160,43 @@ def test_forecast_no_entsoe_trace_when_column_absent():
     assert not any(t.name.startswith("ENTSO-E Prognose") for t in fig.data)
 
 
-def test_forecast_multi_day_adds_dropdown_and_hides_nondefault():
+def test_forecast_entsoe_label_prefers_score_row():
+    # With a pseudo-team score row present, the dashed-trace MAE label uses
+    # that value (figure and leaderboard table show the same number).
+    scores = pd.concat([_scores(), pd.DataFrame([
+        {"team_id": "entsoe", "target_date": "2026-05-26", "mae": 123.0,
+         "rmse": 130.0, "mape": 1.2, "carried_forward": False},
+    ])], ignore_index=True)
+    actuals = _actuals("2026-05-26", with_forecast=True)  # inline MAE wäre 30
+    subs = {"team_4": {"2026-05-26": _sub("2026-05-26")}}
+    fig = charts.fig_forecast_vs_actual(actuals, subs, scores, NAMES)
+    entsoe = next(t for t in fig.data if t.name.startswith("ENTSO-E Prognose"))
+    assert "MAE 123" in entsoe.name
+
+
+def test_forecast_multi_day_exposes_calendar_meta_and_hides_nondefault():
     actuals = pd.concat([_actuals("2026-05-26", with_forecast=False),
                          _actuals("2026-05-27", with_forecast=False)],
                         ignore_index=True)
     subs = {"team_4": {"2026-05-26": _sub("2026-05-26"),
                        "2026-05-27": _sub("2026-05-27")}}
     fig = charts.fig_forecast_vs_actual(actuals, subs, _scores(), NAMES)
-    assert fig.layout.updatemenus, "multi-day chart needs a date dropdown"
-    buttons = fig.layout.updatemenus[0].buttons
-    assert [b.label for b in buttons] == ["2026-05-26", "2026-05-27"]
-    # Default visible = latest day; earlier day hidden (actual + team_4 per day).
+    # Datumsauswahl läuft über das Kalender-Widget im Template — die
+    # nötigen Daten stehen in layout.meta, kein Plotly-Dropdown mehr.
+    assert not fig.layout.updatemenus
+    meta = fig.layout.meta
+    assert meta["days"] == ["2026-05-26", "2026-05-27"]
+    assert meta["titlePrefix"] == "Prognose vs. Ist-Last"
+    # Tag→Trace-Indizes: disjunkt, decken alle Traces ab (actual + team_4 je Tag).
+    assert set(meta["dayTraces"]) == {"2026-05-26", "2026-05-27"}
+    all_idx = sorted(i for idxs in meta["dayTraces"].values() for i in idxs)
+    assert all_idx == list(range(len(fig.data)))
+    # Default visible = latest day; earlier day hidden.
     visibilities = [bool(t.visible) for t in fig.data]
     assert visibilities.count(True) == 2
     assert visibilities.count(False) == 2
+    for i in meta["dayTraces"]["2026-05-27"]:
+        assert fig.data[i].visible
 
 
 # --------------------------------------------------------------------------
@@ -185,6 +214,48 @@ def test_mean_mae_bar_builds_horizontal_bar():
     assert fig.data[0].orientation == "h"
     assert list(fig.data[0].y) == ["Team 4", "Hot Rod"]
     assert fig.layout.yaxis.autorange == "reversed"  # rank 1 on top
+
+
+def test_mean_rmse_bar_sorts_by_rmse():
+    fig = charts.fig_mean_rmse_bar(_board())
+    assert isinstance(fig, go.Figure)
+    # Eigene Sortierung nach mean_rmse: Hot Rod (240) vor Team 4 (290).
+    assert list(fig.data[0].y) == ["Hot Rod", "Team 4"]
+    assert list(fig.data[0].x) == [240.0, 290.0]
+    assert fig.layout.title.text == "Mittlerer RMSE je Team"
+    assert fig.layout.xaxis.title.text == "Ø RMSE [MW]"
+
+
+def test_mean_rmse_bar_none_without_column():
+    board = _board().drop(columns=["mean_rmse"])
+    assert charts.fig_mean_rmse_bar(board) is None
+
+
+def test_mean_mape_bar_sorts_ascending_with_percent_unit():
+    fig = charts.fig_mean_mape_bar(_board())
+    assert list(fig.data[0].y) == ["Team 4", "Hot Rod"]   # 2.5 < 4.0
+    assert fig.layout.title.text == "Mittlere MAPE je Team"
+    assert fig.layout.xaxis.title.text == "Ø MAPE [%]"
+
+
+def test_mean_bias_bar_sorts_by_distance_to_zero():
+    fig = charts.fig_mean_bias_bar(_board())
+    # |+40| < |-90| -> Team 4 zuerst; Balken zeigen die SIGNIERTEN Werte.
+    assert list(fig.data[0].y) == ["Team 4", "Hot Rod"]
+    assert list(fig.data[0].x) == [40.0, -90.0]
+    assert fig.layout.title.text == "Mittlerer Bias je Team"
+    # Referenzlinie bei 0 (Idealwert).
+    assert any(s.x0 == 0 for s in fig.layout.shapes)
+
+
+def test_mean_upr_bar_sorts_by_distance_to_fifty():
+    fig = charts.fig_mean_upr_bar(_board())
+    # |58-50|=8 < |20-50|=30 -> Team 4 zuerst trotz größerem Rohwert.
+    assert list(fig.data[0].y) == ["Team 4", "Hot Rod"]
+    assert list(fig.data[0].x) == [58.0, 20.0]
+    assert fig.layout.xaxis.title.text == "Ø UPR [%]"
+    # Referenzlinie bei 50 % (ausgewogen).
+    assert any(s.x0 == 50 for s in fig.layout.shapes)
 
 
 # --------------------------------------------------------------------------

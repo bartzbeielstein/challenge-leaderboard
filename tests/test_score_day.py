@@ -74,6 +74,7 @@ def teams_yml_file(tmp_path):
             {"id": "team_4", "display_name": "Team 4", "github_handles": ["a"]},
             {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": ["b"]},
             {"id": "ghost", "display_name": "Ghost", "github_handles": ["c"]},
+            {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
         ]
     }))
 
@@ -85,6 +86,24 @@ def test_score_submission_zero_error_is_zero_mae():
     assert out["mae"] == 0
     assert out["rmse"] == 0
     assert out["mape"] == 0
+    assert out["bias"] == 0
+    assert out["upr"] == 0      # Prognose nie unter Ist
+
+
+def test_score_submission_bias_and_upr_signed():
+    actual = pd.Series([1000.0] * 24,
+                        index=pd.date_range("2026-05-26", periods=24, freq="h"))
+    # Konstante Unterprognose um 50 MW: Bias negativ, UPR 100 %.
+    out = sd.score_submission(np.array([950.0] * 24), actual)
+    assert out["bias"] == -50.0
+    assert out["upr"] == 100.0
+    assert out["mae"] == 50.0   # MAE bleibt vorzeichenblind
+    # Gemischt: 12h +100 (über), 12h -100 (unter) -> Bias 0, UPR 50, MAE 100.
+    mixed = np.array([1100.0] * 12 + [900.0] * 12)
+    out = sd.score_submission(mixed, actual)
+    assert out["bias"] == 0.0
+    assert out["upr"] == 50.0
+    assert out["mae"] == 100.0
 
 
 def test_collect_forecasts_exact_match(write_submission, teams_yml_file):
@@ -117,6 +136,18 @@ def test_collect_forecasts_ignores_future_dates(write_submission, teams_yml_file
     # the bug after LOCF would be picking up a *future* submission).
     write_submission("team_4", "2026-05-27")
     assert sd.collect_forecasts("2026-05-26", ["team_4"]) == []
+
+
+def test_pseudo_team_never_scored_even_with_submission_dir(
+    write_submission, teams_yml_file
+):
+    # Pseudo teams (entsoe) are excluded from the registry the daily scoring
+    # iterates — even a stray submissions/<id>/ dir must not get them scored
+    # (otherwise LOCF would silently carry old CSVs forward forever).
+    write_submission("entsoe", "2026-05-26")
+    assert "entsoe" not in sd.load_team_ids()
+    forecasts = sd.collect_forecasts("2026-05-26", sd.load_team_ids())
+    assert all(t != "entsoe" for t, _, _ in forecasts)
 
 
 def test_main_writes_parquet_with_expected_rows(

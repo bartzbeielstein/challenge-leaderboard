@@ -1,0 +1,13 @@
+# Minimal team registry for the reproducibility package.
+# Subset of challenge-leaderboard/teams.yml (only the ids this package can
+# submit as); lets team4_submit.py run with --leaderboard-root . (packaged-copy
+# divergence D3).
+teams:
+  - id: team_4
+    display_name: "Team 4 SpotOptim"
+    github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+  - id: team_4_entsoe
+    display_name: "Team 4 SpotOptim (ENTSO-E)"
+    github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
