@@ -21,12 +21,16 @@ def _load(name: str) -> dict:
 
 
 def test_score_daily_has_09_utc_cron():
-    # 09:00 UTC gives margin over ENTSO-E's H+1 publication floor for the
-    # last UTC hour; see the comment in score-daily.yml and README.
+    # The 09 UTC hour gives margin over ENTSO-E's H+1 publication floor for
+    # the last UTC hour; see the comment in score-daily.yml and README. The
+    # minute is deliberately off the full hour (GitHub delays/drops schedules
+    # at :00), so assert the hour, not the exact minute.
     wf = _load("score-daily.yml")
     on = wf[True] if True in wf else wf["on"]  # PyYAML quirk: `on` -> True
     crons = [s["cron"] for s in on["schedule"]]
-    assert "0 9 * * *" in crons
+    hours = {c.split()[1] for c in crons}
+    assert "9" in hours, f"expected a 09 UTC cron, got {crons}"
+    assert "0 9 * * *" not in crons, "cron minute must be off the full hour (:00)"
     assert "0 7 * * *" not in crons, "07:00 UTC cron must be retired (too early)"
 
 
