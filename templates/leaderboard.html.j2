@@ -64,6 +64,14 @@
     table.ranking tbody tr:first-child td:first-child::before { content: "🏆 "; }
     td.locf { color: #9aa1ab; }
     td.miss { color: #d0d4da; text-align: right; }
+    /* Fehlende Model Card in „About the Models". */
+    td.card-missing { color: #b54708; font-style: italic; }
+    /* Status-Spalte im Leaderboard (Model Card vorhanden?). */
+    th.status, td.status { text-align: center; }
+    td.status.na { color: #d0d4da; }
+    /* Software-Spalte in „About the Models": ZIP-Link und Strich rechtsbündig. */
+    th.software, td.software { text-align: right; }
+    td.software.na { color: #d0d4da; }
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
@@ -144,13 +152,16 @@
 
   <p class="meta">Stand: {{ generated_at }} UTC.</p>
 
-  <section class="card">
-    <h2>Leaderboard</h2>
-    {% if rows %}
+  {# Gemeinsames Ranking-Tabellen-Markup für beide Leaderboards (Live-Wertung
+     oben, „Leaderboard Test Phase" am Seitenende) — eine Quelle, damit
+     Spalten und Spaltenbeste nie auseinanderlaufen. #}
+  {% macro ranking_table(rows) %}
     <table class="ranking">
       <thead>
         <tr>
           <th>#</th><th>Team</th>
+          <th title="Gruppe laut group-Schlüssel in teams.yml">Group</th>
+          <th class="status" title="Model Card veröffentlicht? Quelle: model_card_link in teams.yml (s. „About the Models")">Status</th>
           <th class="num">Mean MAE [MW]</th>
           <th class="num">Mean RMSE [MW]</th>
           <th class="num">Mean MAPE [%]</th>
@@ -164,6 +175,14 @@
         <tr>
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
+          <td>{{ row.group if row.group else "—" }}</td>
+          {% if row.model_card_status %}
+          <td class="status" title="Model Card veröffentlicht">✅</td>
+          {% elif row.model_card_status is sameas false %}
+          <td class="status" title="Model Card fehlt (s. „About the Models")">⚠️</td>
+          {% else %}
+          <td class="status na" title="Pseudo-Team — kein eigenes Modell">—</td>
+          {% endif %}
           <td class="num{{ ' best' if row.best_mae else '' }}">{{ "%.2f"|format(row.mean_mae) }}</td>
           <td class="num{{ ' best' if row.best_rmse else '' }}">{{ "%.2f"|format(row.mean_rmse) }}</td>
           <td class="num{{ ' best' if row.best_mape else '' }}">{{ "%.2f"|format(row.mean_mape) }}</td>
@@ -174,8 +193,25 @@
       {% endfor %}
       </tbody>
     </table>
+  {% endmacro %}
+
+  <section class="card">
+    <h2>Leaderboard</h2>
     <p class="meta">
-      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Fett</b> markiert
+      Live-Wertung des Wettbewerbs ab Zieltag 10.06.2026 (UTC, „clean
+      restart"): alle Mittelwerte starten bei null und zählen ausschließlich
+      Submissions ab diesem Tag. Die Auswertung eines Zieltags erscheint am
+      Folgetag, sobald die ENTSO-E-Ist-Werte veröffentlicht sind. Die
+      abgeschlossene Aufwärmphase finden Sie unten unter „Leaderboard Test
+      Phase".
+    </p>
+    {% if rows %}
+    {{ ranking_table(rows) }}
+    <p class="meta">
+      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Status</b>:
+      ✅ = Model Card veröffentlicht, ⚠️ = fehlt — gleiche Quelle wie die
+      Sektion „About the Models" (<code>model_card_link</code> in
+      <code>teams.yml</code>). <b>Fett</b> markiert
       den besten Wert jeder Spalte: Minimum bei MAE/RMSE/MAPE, am nächsten
       an 0 beim Bias, am nächsten an 50&nbsp;% bei der UPR, Maximum bei den
       bewerteten Tagen. <b>Bias</b> =
@@ -189,7 +225,12 @@
       Forecasts", arXiv:2302.11017</a>.
     </p>
     {% else %}
-      <p class="empty">Noch keine bewerteten Submissions.</p>
+      <p class="empty">
+        Noch keine Live-Wertung — die erste Auswertung erscheint, sobald die
+        ENTSO-E-Ist-Werte für den 10.06.2026 veröffentlicht sind (am
+        11.06.2026, UTC). Bis dahin finden Sie die letzten Auswertungen unten
+        unter „Leaderboard Test Phase".
+      </p>
     {% endif %}
   </section>
 
@@ -501,6 +542,74 @@
     });
   })();
   </script>
+  {% endif %}
+
+  <section class="card">
+    <h2>Leaderboard Test Phase</h2>
+    <p class="meta">
+      Eingefrorene Wertung der Aufwärm-/Testphase: alle Zieltage <b>vor</b>
+      dem 10.06.2026 (UTC). Diese Tabelle dokumentiert die Testphase und
+      ändert sich nicht mehr — die laufende Wertung steht oben unter
+      „Leaderboard". Spalten und Markierungen sind identisch zur Live-Wertung.
+    </p>
+    {% if rows_test %}
+    {{ ranking_table(rows_test) }}
+    {% else %}
+      <p class="empty">Keine bewerteten Submissions in der Testphase.</p>
+    {% endif %}
+  </section>
+
+  {% if model_cards %}
+  <section class="card">
+    <h2>About the Models</h2>
+    <p class="meta">
+      Model Cards dokumentieren Modellarchitektur, Trainingsdaten und
+      Limitationen der eingesetzten Prognosemodelle; Teams ohne
+      veröffentlichten Link sind mit ⚠️ markiert. <b>Software</b> verlinkt
+      das herunterladbare Reproduzierbarkeits-ZIP der Prognose-Software
+      (gepinnte Abhängigkeiten via <code>uv</code>, eingefrorene Daten,
+      Anleitung). Quelle: <code>model_card_link</code> bzw.
+      <code>software_link</code> in <code>teams.yml</code>.
+      <b>Reproduktion zertifizieren:</b> Prüfteams laden die
+      <a href="./Certificate.md">Reproduktions-Zertifikat-Vorlage</a> herunter,
+      füllen sie aus, kompilieren sie zu PDF und senden sie an den Veranstalter
+      Prof. Dr. Bartz-Beielstein; die Spalte
+      <b>Certified</b> zeigt anschließend ✅ (Schlüssel <code>certified</code>
+      in <code>teams.yml</code>).
+    </p>
+    <table>
+      <thead>
+        <tr><th>Team</th><th>Model Card</th><th class="software">Software</th><th class="status">Certified</th><th>OpenSSF</th></tr>
+      </thead>
+      <tbody>
+      {% for mc in model_cards %}
+        <tr>
+          <td>{{ mc.display_name }}</td>
+          {% if mc.model_card_link %}
+          <td><a href="{{ mc.model_card_link }}">Model Card</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
+          {% endif %}
+          {% if mc.software_link %}
+          <td class="software"><a href="{{ mc.software_link }}">ZIP</a></td>
+          {% else %}
+          <td class="software na">—</td>
+          {% endif %}
+          {% if mc.certified == "Yes" %}
+          <td class="status" title="Reproduktion zertifiziert">✅</td>
+          {% else %}
+          <td class="status na" title="Noch nicht zertifiziert">—</td>
+          {% endif %}
+          {% if mc.openssf %}
+          <td><a href="{{ mc.openssf }}">OpenSSF Scorecard</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
   {% endif %}
 
   <footer>

@@ -91,10 +91,11 @@ def test_annotate_leaderboard_best_marks_columnwise_winners():
 
 def test_main_writes_html_and_json(tmp_path):
     _seed_teams(tmp_path)
+    # Zieltage >= RESTART_DATE -> Live-Leaderboard (scores.json = Live-Wertung).
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1},
-        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+        {"team_id": "hot_rod", "target_date": "2026-06-26", "mae": 200.0,
          "rmse": 200.0, "mape": 0.2},
     ])
     bl.main()
@@ -202,8 +203,10 @@ def test_main_writes_daily_section_in_html(tmp_path):
     assert 'data-week="2026-W22"' in html
     # Tagesbeste fett: je Spalte genau eine best-Zelle, in allen 5 Tabellen
     # (hier 2 Spalten mit jeweils genau einem Wert -> 5 x 2). Nur den
-    # Tagesfehler-Teil zählen — das Leaderboard hat eigene best-Zellen.
-    daily_html = html[html.index("Tagesfehler je Team [MAE]"):]
+    # Tagesfehler-Teil zählen — beide Leaderboards haben eigene best-Zellen
+    # (die Testphase steht direkt darunter).
+    daily_html = html[html.index("Tagesfehler je Team [MAE]"):
+                      html.index("<h2>Leaderboard Test Phase</h2>")]
     assert daily_html.count('class="num best"') == 10
     daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
     assert daily["dates"] == ["2026-05-12", "2026-05-26"]
@@ -244,10 +247,12 @@ def _write_submission(tmp_path, team: str, date: str):
 
 def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
     _seed_teams(tmp_path)
+    # Zieltage >= RESTART_DATE -> die „Mittlere … je Team"-Balken (Live-Board)
+    # sind befüllt; vor dem Neustart wären sie leer und die Sektionen entfielen.
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1, "carried_forward": False},
-        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+        {"team_id": "hot_rod", "target_date": "2026-06-26", "mae": 200.0,
          "rmse": 200.0, "mape": 0.2, "carried_forward": False},
     ])
     bl.main()
@@ -323,6 +328,230 @@ def test_main_omits_logo_when_absent(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# "About the Models" section — driven by `model_card_link` in teams.yml.
+# --------------------------------------------------------------------------
+
+ZIP_URL = "https://example.org/team4-repro.zip"
+
+
+def _seed_teams_with_model_card(tmp_path: Path, url: str):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "model_card_link": url, "software_link": ZIP_URL},
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": []},   # no links -> warning + dash
+        ]
+    }))
+
+
+def test_load_model_cards_lists_all_regular_teams(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    # One row per regular team, file order; missing links -> None.
+    assert bl.load_model_cards() == [
+        {"display_name": "Team 4", "model_card_link": url,
+         "software_link": ZIP_URL, "certified": None, "openssf": None},
+        {"display_name": "Hot Rod", "model_card_link": None,
+         "software_link": None, "certified": None, "openssf": None},
+    ]
+
+
+def test_load_model_cards_skips_pseudo_teams(tmp_path):
+    _seed_teams(tmp_path)  # includes pseudo team "ENTSO-E"
+    names = [mc["display_name"] for mc in bl.load_model_cards()]
+    assert "ENTSO-E" not in names
+    assert names == ["Team 4", "Hot Rod", "Team Neura"]
+
+
+def test_main_renders_model_cards_section(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    assert "About the Models" in html
+    assert f'<a href="{url}">' in html
+    # Section appears below all metric sections, above the footer.
+    assert html.rindex("About the Models") > html.rindex("Leaderboard")
+    assert html.rindex("About the Models") < html.rindex("<footer>")
+
+
+def test_main_flags_teams_without_model_card(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    # Hot Rod has no link -> warning entry instead of an anchor.
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    assert '<td class="card-missing">⚠️ missing</td>' in section
+    assert section.count("<tr>") == 1 + 2  # header + one row per team
+
+
+def test_main_renders_software_column(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    # Column order: Team, Model Card, Software.
+    head = section[section.index("<thead>"):section.index("</thead>")]
+    assert (head.index(">Team<") < head.index(">Model Card<")
+            < head.index(">Software<"))
+    # Team 4 has a software_link -> ZIP anchor; Hot Rod -> dash, NO warning
+    # (Software ist freiwillig, nur die Model Card wird angemahnt).
+    row4 = section[section.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert f'<a href="{ZIP_URL}">ZIP</a>' in row4
+    rowhr = section[section.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert ZIP_URL not in rowhr
+    assert '<td class="software na">—</td>' in rowhr
+    # Software adds no warning; the row's warnings come from the missing
+    # Model Card and the missing OpenSSF scorecard.
+    assert rowhr.count("⚠️") == 2
+
+
+def _seed_teams_with_certified(tmp_path: Path):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "certified": "Yes"},
+            {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": [],
+             "certified": "No"},
+            {"id": "neura", "display_name": "Team Neura",
+             "github_handles": []},   # certified key absent
+        ]
+    }))
+
+
+def test_main_renders_certified_column(tmp_path):
+    _seed_teams_with_certified(tmp_path)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    # Column order: Certified sits after Software.
+    head = section[section.index("<thead>"):section.index("</thead>")]
+    assert head.index(">Software<") < head.index(">Certified<")
+    # "Yes" -> check mark; "No" and missing -> dash, never a check mark.
+    row4 = section[section.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert "✅" in row4
+    rowhr = section[section.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert "✅" not in rowhr and '<td class="status na"' in rowhr
+    rown = section[section.index("<td>Team Neura</td>"):]
+    rown = rown[:rown.index("</tr>")]
+    assert "✅" not in rown and '<td class="status na"' in rown
+
+
+def test_main_renders_openssf_column(tmp_path):
+    import yaml
+    scorecard = "https://scorecard.dev/viewer/?uri=github.com/x/y"
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "openssf": scorecard},
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": []},   # no openssf -> missing + warning
+        ]
+    }))
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    # OpenSSF column sits after Certified.
+    head = section[section.index("<thead>"):section.index("</thead>")]
+    assert head.index(">Certified<") < head.index(">OpenSSF<")
+    # Team 4 has a scorecard link; Hot Rod -> missing warning.
+    row4 = section[section.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert f'<a href="{scorecard}">' in row4
+    rowhr = section[section.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert scorecard not in rowhr
+    assert '<td class="card-missing">⚠️ missing</td>' in rowhr
+
+
+def test_main_emits_certificate_template(tmp_path):
+    # The build copies templates/Certificate.md verbatim into public/ so the
+    # "About the Models" footnote can link to ./Certificate.md.
+    _seed_teams_with_certified(tmp_path)
+    bl.main()
+    published = tmp_path / "public" / "Certificate.md"
+    assert published.exists()
+    source = bl.TEMPLATE_DIR / "Certificate.md"
+    assert published.read_text() == source.read_text()
+
+
+def test_about_the_models_links_certificate(tmp_path):
+    _seed_teams_with_certified(tmp_path)
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    section = html[html.index("About the Models"):html.index("<footer>")]
+    assert 'href="./Certificate.md"' in section
+
+
+# --------------------------------------------------------------------------
+# Leaderboard "Status" column — same source as "About the Models".
+# --------------------------------------------------------------------------
+
+def test_load_model_card_status_true_false_none(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    assert bl.load_model_card_status() == {"team_4": True, "hot_rod": False}
+
+
+def test_load_model_card_status_pseudo_is_none(tmp_path):
+    _seed_teams(tmp_path)  # includes pseudo team "entsoe"
+    status = bl.load_model_card_status()
+    assert status["entsoe"] is None
+    assert status["team_4"] is False
+
+
+def test_main_leaderboard_status_column(tmp_path):
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1},
+        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2},
+    ])
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    table = html[html.index('<table class="ranking">'):]
+    table = table[:table.index("</table>")]
+    # Header: Status sits between Team and Mean MAE.
+    head = table[:table.index("</thead>")]
+    assert head.index(">Team<") < head.index(">Status<") < head.index("Mean MAE")
+    # Team 4 has a model_card_link -> check mark; Hot Rod lacks one -> warning.
+    row4 = table[table.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert "✅" in row4 and "⚠️" not in row4
+    rowhr = table[table.index("<td>Hot Rod</td>"):]
+    rowhr = rowhr[:rowhr.index("</tr>")]
+    assert "⚠️" in rowhr and "✅" not in rowhr
+
+
+def test_main_leaderboard_status_dash_for_pseudo(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    _write_actuals(tmp_path, "2026-05-26")        # ranks the pseudo-team
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    table = html[html.index('<table class="ranking">'):]
+    table = table[:table.index("</table>")]
+    row = table[table.index("<td>ENTSO-E</td>"):]
+    row = row[:row.index("</tr>")]
+    assert '<td class="status na"' in row     # dash, not a warning
+    assert "⚠️" not in row and "✅" not in row
+
+
+# --------------------------------------------------------------------------
 # ENTSO-E day-ahead forecast as the ranked pseudo-team `entsoe`.
 # --------------------------------------------------------------------------
 
@@ -383,12 +612,12 @@ def test_entsoe_pseudo_authoritative_overrides_parquet(tmp_path):
     # submission) must be IGNORED — the derived value wins.
     _seed_teams(tmp_path)
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1, "carried_forward": False},
-        {"team_id": "entsoe", "target_date": "2026-05-26", "mae": 42.0,
+        {"team_id": "entsoe", "target_date": "2026-06-26", "mae": 42.0,
          "rmse": 42.0, "mape": 0.04, "carried_forward": True},
     ])
-    _write_actuals(tmp_path, "2026-05-26")        # forecast = load-10 -> MAE 10
+    _write_actuals(tmp_path, "2026-06-26")        # forecast = load-10 -> MAE 10
     bl.main()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     entsoe = next(r for r in data if r["team_id"] == "entsoe")
@@ -400,11 +629,12 @@ def test_entsoe_pseudo_authoritative_overrides_parquet(tmp_path):
 
 def test_main_ranks_entsoe_pseudo_in_leaderboard(tmp_path):
     _seed_teams(tmp_path)
+    # Zieltag >= RESTART_DATE -> entsoe-Pseudo-Team im Live-Leaderboard.
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1, "carried_forward": False},
     ])
-    _write_actuals(tmp_path, "2026-05-26")        # carries entsoe_forecast_mw
+    _write_actuals(tmp_path, "2026-06-26")        # carries entsoe_forecast_mw
     bl.main()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert "entsoe" in [r["team_id"] for r in data]
