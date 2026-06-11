@@ -66,7 +66,7 @@
     td.miss { color: #d0d4da; text-align: right; }
     /* Fehlende Model Card in „About the Models". */
     td.card-missing { color: #b54708; font-style: italic; }
-    /* Status-Spalte im Leaderboard (Model Card vorhanden?). */
+    /* Status-Spalte im Leaderboard (alle Artefakte vorhanden?). */
     th.status, td.status { text-align: center; }
     td.status.na { color: #d0d4da; }
     /* Software-Spalte in „About the Models": ZIP-Link und Strich rechtsbündig. */
@@ -161,7 +161,7 @@
         <tr>
           <th>#</th><th>Team</th>
           <th title="Gruppe laut group-Schlüssel in teams.yml">Group</th>
-          <th class="status" title="Model Card veröffentlicht? Quelle: model_card_link in teams.yml (s. „About the Models")">Status</th>
+          <th class="status" title="Alle Artefakte vorhanden? Grün nur, wenn Model Card, Software und Certified vorliegen — Quelle: teams.yml (s. „About the Models")">Status</th>
           <th class="num">Mean MAE [MW]</th>
           <th class="num">Mean RMSE [MW]</th>
           <th class="num">Mean MAPE [%]</th>
@@ -176,10 +176,10 @@
           <td><span class="rank-badge">{{ row.rank }}</span></td>
           <td>{{ row.display_name }}</td>
           <td>{{ row.group if row.group else "—" }}</td>
-          {% if row.model_card_status %}
-          <td class="status" title="Model Card veröffentlicht">✅</td>
-          {% elif row.model_card_status is sameas false %}
-          <td class="status" title="Model Card fehlt (s. „About the Models")">⚠️</td>
+          {% if row.artifact_status %}
+          <td class="status" title="Model Card, Software und Certified vorhanden">✅</td>
+          {% elif row.artifact_status is sameas false %}
+          <td class="status" title="Model Card, Software oder Certified fehlt (s. „About the Models")">⚠️</td>
           {% else %}
           <td class="status na" title="Pseudo-Team — kein eigenes Modell">—</td>
           {% endif %}
@@ -200,18 +200,20 @@
     <p class="meta">
       Live-Wertung des Wettbewerbs ab Zieltag 10.06.2026 (UTC, „clean
       restart"): alle Mittelwerte starten bei null und zählen ausschließlich
-      Submissions ab diesem Tag. Die Auswertung eines Zieltags erscheint am
-      Folgetag, sobald die ENTSO-E-Ist-Werte veröffentlicht sind. Die
-      abgeschlossene Aufwärmphase finden Sie unten unter „Leaderboard Test
-      Phase".
+      Submissions ab diesem Tag. Gelistet sind nur Teams, die ab diesem
+      Zieltag mindestens eine eigene Prognose eingereicht haben — allein
+      fortgeschriebene Prognosen (LOCF) qualifizieren nicht. Die Auswertung
+      eines Zieltags erscheint am Folgetag, sobald die ENTSO-E-Ist-Werte
+      veröffentlicht sind. Die abgeschlossene Aufwärmphase finden Sie unten
+      unter „Leaderboard Test Phase".
     </p>
     {% if rows %}
     {{ ranking_table(rows) }}
     <p class="meta">
       Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Status</b>:
-      ✅ = Model Card veröffentlicht, ⚠️ = fehlt — gleiche Quelle wie die
-      Sektion „About the Models" (<code>model_card_link</code> in
-      <code>teams.yml</code>). <b>Fett</b> markiert
+      ✅ = Model Card, Software und Certified vorhanden, ⚠️ = mindestens
+      eines fehlt — gleiche Quelle wie die Sektion „About the Models"
+      (<code>teams.yml</code>). <b>Fett</b> markiert
       den besten Wert jeder Spalte: Minimum bei MAE/RMSE/MAPE, am nächsten
       an 0 beim Bias, am nächsten an 50&nbsp;% bei der UPR, Maximum bei den
       bewerteten Tagen. <b>Bias</b> =

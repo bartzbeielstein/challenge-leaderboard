@@ -87,19 +87,22 @@ def load_model_cards() -> list[dict[str, str | None]]:
     ]
 
 
-def load_model_card_status() -> dict[str, bool | None]:
-    """Model-Card-Status je Team für die Status-Spalte im Leaderboard.
+def load_artifact_status() -> dict[str, bool | None]:
+    """Artefakt-Status je Team für die Status-Spalte im Leaderboard.
 
-    Gleiche Quelle wie die Sektion „About the Models" (``model_card_link``
-    in ``teams.yml``) — beide bleiben damit automatisch synchron. ``True``
-    = Link veröffentlicht (grüner Haken), ``False`` = fehlt (Warn-Icon),
-    ``None`` für Pseudo-Teams (kein eigenes Modell → Strich statt
-    Warnung).
+    Gleiche Quelle wie die Sektion „About the Models" (``teams.yml``) —
+    beide bleiben damit automatisch synchron. ``True`` (grüner Haken) nur,
+    wenn alle drei Artefakte vorliegen: ``model_card_link`` gesetzt,
+    ``software_link`` gesetzt und ``certified == "Yes"``. ``False`` =
+    mindestens ein Artefakt fehlt (Warn-Icon), ``None`` für Pseudo-Teams
+    (kein eigenes Modell → Strich statt Warnung).
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return {
         t["id"]: (None if t.get("pseudo", False)
-                  else bool(t.get("model_card_link")))
+                  else (bool(t.get("model_card_link"))
+                        and bool(t.get("software_link"))
+                        and t.get("certified") == "Yes"))
         for t in (data.get("teams") or [])
     }
 
@@ -146,6 +149,28 @@ def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     ).reset_index(drop=True)
     out.insert(0, "rank", range(1, len(out) + 1))
     return out
+
+
+def filter_live_teams(scores_live: pd.DataFrame) -> pd.DataFrame:
+    """Live-Wertung auf Teams mit frischer Einreichung beschränken.
+
+    LOCF (``score_day.py``) schreibt für ausbleibende Einreichungen
+    Carry-Forward-Zeilen (``carried_forward == True``) — auch über den
+    Phasen-Schnitt (``RESTART_DATE``) hinweg. Ohne diesen Filter bliebe
+    ein Team, das nur in der Testphase eingereicht hat, per LOCF im
+    Live-Leaderboard und in den „Mittlere … je Team"-Balken gelistet.
+    Regel: Ein Team zählt zur Live-Phase, wenn es dort mindestens eine
+    frische Zeile (``carried_forward == False``) hat; seine LOCF-Zeilen
+    bleiben dann erhalten (Strafmechanik für verpasste Tage). Fehlt die
+    Spalte oder der Wert (ältere Parquet-Stände), gilt die Zeile als
+    frisch; Pseudo-Teams liefern ``carried_forward == False`` (s.
+    ``entsoe_pseudo_scores``) und bleiben gerankt.
+    """
+    if scores_live.empty or "carried_forward" not in scores_live.columns:
+        return scores_live
+    fresh = scores_live["carried_forward"].ne(True)   # NaN → frisch
+    live_ids = set(scores_live.loc[fresh, "team_id"])
+    return scores_live[scores_live["team_id"].isin(live_ids)].copy()
 
 
 def daily_breakdown(
@@ -361,7 +386,7 @@ def render(
     board: pd.DataFrame, board_test: pd.DataFrame, daily: dict,
     figs: dict[str, str], logo_uri: str = "",
     model_cards: list[dict[str, str]] | None = None,
-    model_card_status: dict[str, bool | None] | None = None,
+    artifact_status: dict[str, bool | None] | None = None,
     groups: dict[str, str] | None = None,
 ) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -379,12 +404,13 @@ def render(
     # ``rows_test`` = eingefrorene Testphase (Sektion am Seitenende).
     rows = annotate_leaderboard_best(board.to_dict(orient="records"))
     rows_test = annotate_leaderboard_best(board_test.to_dict(orient="records"))
-    # Status-Spalte: Model Card vorhanden? Gleiche Quelle wie „About the
-    # Models" (teams.yml) — None für Pseudo-Teams und unbekannte Ids.
-    status = model_card_status or {}
+    # Status-Spalte: alle drei Artefakte (Model Card, Software, Certified)
+    # vorhanden? Gleiche Quelle wie „About the Models" (teams.yml) — None
+    # für Pseudo-Teams und unbekannte Ids.
+    status = artifact_status or {}
     grp = groups or {}
     for r in (*rows, *rows_test):
-        r["model_card_status"] = status.get(r["team_id"])
+        r["artifact_status"] = status.get(r["team_id"])
         r["group"] = grp.get(r["team_id"])
     html = template.render(
         rows=rows,
@@ -437,12 +463,15 @@ def main() -> None:
     # Phasen-Trennung (clean restart, s. RESTART_DATE): Mittelwerte des oberen
     # „Leaderboard" und der „Mittlere … je Team"-Balken zählen nur Live-Tage
     # (>= RESTART_DATE) und starten bei null; die eingefrorene Testphase
-    # (< RESTART_DATE) erscheint separat am Seitenende. Die fortlaufenden
-    # Figuren (Prognose, MAE-Verlauf, Tagesfehler) nutzen weiter die volle
-    # Historie (``scores``).
+    # (< RESTART_DATE) erscheint separat am Seitenende. Zusätzlich gehören
+    # nur Teams mit mindestens einer frischen Einreichung ab RESTART_DATE
+    # zur Live-Wertung (s. filter_live_teams — LOCF-Zeilen allein
+    # qualifizieren nicht). Die fortlaufenden Figuren (Prognose,
+    # MAE-Verlauf, Tagesfehler) nutzen weiter die volle Historie
+    # (``scores``).
     if not scores.empty:
         td = scores["target_date"].astype(str)
-        scores_live = scores[td >= RESTART_DATE].copy()
+        scores_live = filter_live_teams(scores[td >= RESTART_DATE].copy())
         scores_test = scores[td < RESTART_DATE].copy()
     else:
         scores_live = scores_test = scores
@@ -456,7 +485,7 @@ def main() -> None:
     figs = build_figures(board, daily, scores, names, actuals)
     logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
     render(board, board_test, daily, figs, logo_uri, load_model_cards(),
-           load_model_card_status(), load_groups())
+           load_artifact_status(), load_groups())
     print(f"[build] Live-Leaderboard {len(board)} Teams, Testphase "
           f"{len(board_test)} Teams ({len(daily['dates'])} bewertete Tage) "
           f"-> public/index.html")
