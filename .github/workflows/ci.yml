@@ -1,0 +1,42 @@
+name: CI
+
+# Guards the pipeline itself: runs the hermetic test suite (no ENTSO-E,
+# no GitHub API) and lints every workflow with actionlint on each PR/push.
+# Without this, the tests in tests/ only ran locally and never blocked a
+# change that broke a workflow invariant.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Python-Stack
+        run: uv sync --frozen
+
+      - name: pytest
+        run: uv run pytest
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install actionlint
+        run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+
+      - name: Run actionlint
+        run: ./actionlint -color
