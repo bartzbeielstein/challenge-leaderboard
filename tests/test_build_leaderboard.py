@@ -658,6 +658,59 @@ def test_main_live_board_excludes_locf_only_team(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# Retired teams (retired: true, e.g. replaced by a successor): out of the
+# live board and "About the Models"; test phase and full history remain.
+# --------------------------------------------------------------------------
+
+def _seed_teams_with_retired(tmp_path: Path):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": []},
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": [], "retired": True},
+            {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
+        ]
+    }))
+
+
+def test_load_retired_ids_reads_flag(tmp_path):
+    _seed_teams_with_retired(tmp_path)
+    assert bl.load_retired_ids() == {"hot_rod"}
+
+
+def test_load_model_cards_skips_retired_teams(tmp_path):
+    _seed_teams_with_retired(tmp_path)
+    names = [mc["display_name"] for mc in bl.load_model_cards()]
+    assert names == ["Team 4"]   # weder Pseudo- noch Retired-Teams
+
+
+def test_main_live_board_excludes_retired_team(tmp_path):
+    _seed_teams_with_retired(tmp_path)
+    _seed(tmp_path, [
+        # Testphase: beide Teams aktiv.
+        {"team_id": "team_4", "target_date": "2026-06-07", "mae": 150.0,
+         "rmse": 150.0, "mape": 0.15, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-07", "mae": 250.0,
+         "rmse": 250.0, "mape": 0.25, "carried_forward": False},
+        # Live-Phase: auch eine FRISCHE Zeile des Retired-Teams zählt nicht.
+        {"team_id": "team_4", "target_date": "2026-06-10", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-10", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2, "carried_forward": False},
+    ])
+    bl.main()
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    assert [r["team_id"] for r in data] == ["team_4"]
+    # Testphase und volle Historie behalten das Retired-Team.
+    daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
+    assert "hot_rod" in [t["team_id"] for t in daily["teams"]]
+    html = (tmp_path / "public" / "index.html").read_text()
+    test_board = html[html.index("Leaderboard Test Phase"):]
+    assert "Hot Rod" in test_board
+
+
+# --------------------------------------------------------------------------
 # ENTSO-E day-ahead forecast as the ranked pseudo-team `entsoe`.
 # --------------------------------------------------------------------------
 

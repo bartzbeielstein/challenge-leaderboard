@@ -60,6 +60,8 @@ def teams_yml(tmp_path) -> Path:
                  "github_handles": ["nobody"]},
                 {"id": "entsoe", "display_name": "ENTSO-E",
                  "pseudo": True},
+                {"id": "old_team", "display_name": "Old Team",
+                 "github_handles": ["bartzbeielstein"], "retired": True},
             ]
         })
     )

@@ -74,7 +74,9 @@ def load_model_cards() -> list[dict[str, str | None]]:
     ein Strich. Der optionale Schlüssel ``openssf`` (Spalte „OPENSSF")
     verlinkt die OpenSSF-Scorecard; fehlt er, rendert die Spalte „missing"
     mit Warn-Icon (analog zur Model Card). Pseudo-Teams (z. B. ``entsoe``)
-    submitten kein eigenes Modell und entfallen.
+    submitten kein eigenes Modell und entfallen; Retired-Teams (``retired:
+    true``, durch Nachfolger ersetzt) nehmen nicht mehr teil und entfallen
+    ebenfalls.
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return [
@@ -83,7 +85,8 @@ def load_model_cards() -> list[dict[str, str | None]]:
          "software_link": t.get("software_link"),
          "certified": t.get("certified"),
          "openssf": t.get("openssf")}
-        for t in (data.get("teams") or []) if not t.get("pseudo", False)
+        for t in (data.get("teams") or [])
+        if not t.get("pseudo", False) and not t.get("retired", False)
     ]
 
 
@@ -117,6 +120,21 @@ def load_pseudo_ids() -> set[str]:
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return {t["id"] for t in (data.get("teams") or []) if t.get("pseudo", False)}
+
+
+def load_retired_ids() -> set[str]:
+    """Ids der Retired-Teams (``retired: true`` in teams.yml).
+
+    Retired-Teams (z. B. ``team_4``/``team_4_entsoe``, ab 2026-06-10 durch
+    die ``*_4zones``-Nachfolger ersetzt) nehmen nicht mehr am
+    Live-Wettbewerb teil: ``score_day.py`` benotet sie nicht mehr und ihre
+    Zeilen entfallen aus der Live-Wertung (Leaderboard + „Mittlere … je
+    Team"-Balken) sowie aus „About the Models". Testphase und volle
+    Historie (Tagesfehler, MAE-Verlauf, Prognose-Figur) bleiben erhalten.
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return {t["id"] for t in (data.get("teams") or [])
+            if t.get("retired", False)}
 
 
 def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
@@ -466,13 +484,17 @@ def main() -> None:
     # (< RESTART_DATE) erscheint separat am Seitenende. Zusätzlich gehören
     # nur Teams mit mindestens einer frischen Einreichung ab RESTART_DATE
     # zur Live-Wertung (s. filter_live_teams — LOCF-Zeilen allein
-    # qualifizieren nicht). Die fortlaufenden Figuren (Prognose,
-    # MAE-Verlauf, Tagesfehler) nutzen weiter die volle Historie
-    # (``scores``).
+    # qualifizieren nicht); Retired-Teams (s. load_retired_ids) entfallen
+    # dort ebenfalls. Die fortlaufenden Figuren (Prognose, MAE-Verlauf,
+    # Tagesfehler) nutzen weiter die volle Historie (``scores``).
     if not scores.empty:
         td = scores["target_date"].astype(str)
         scores_live = filter_live_teams(scores[td >= RESTART_DATE].copy())
         scores_test = scores[td < RESTART_DATE].copy()
+        retired_ids = load_retired_ids()
+        if retired_ids:
+            scores_live = scores_live[
+                ~scores_live["team_id"].isin(retired_ids)].copy()
     else:
         scores_live = scores_test = scores
     board = aggregate(scores_live, names)         # oberes „Leaderboard" (live)

@@ -113,3 +113,13 @@ def test_authorship_rejects_pseudo_team(teams_yml):
     with pytest.raises(SystemExit) as ei:
         vs.validate_authorship("entsoe", "bartzbeielstein", teams)
     assert ei.value.code == 3
+
+
+def test_authorship_rejects_retired_team(teams_yml):
+    # Retired teams left the live competition (e.g. replaced by a
+    # successor) — new submissions must be rejected even for the
+    # registered author.
+    teams = vs.load_teams(teams_yml)
+    with pytest.raises(SystemExit) as ei:
+        vs.validate_authorship("old_team", "bartzbeielstein", teams)
+    assert ei.value.code == 3

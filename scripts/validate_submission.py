@@ -95,6 +95,9 @@ def validate_authorship(team_id: str, pr_author: str,
         die(3, f"Team '{team_id}' ist ein Pseudo-Team (Scores werden direkt "
                f"aus den ENTSO-E-Daten abgeleitet); CSV-Submissions sind "
                f"nicht erlaubt")
+    if team.get("retired", False):
+        die(3, f"Team '{team_id}' nimmt nicht mehr am Live-Wettbewerb teil "
+               f"(retired in teams.yml); neue Submissions sind nicht erlaubt")
     handles = [h.lower() for h in team.get("github_handles", [])]
     if pr_author.lower() not in handles:
         die(3, f"PR-Autor '{pr_author}' nicht in github_handles für "
