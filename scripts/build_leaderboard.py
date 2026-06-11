@@ -32,11 +32,76 @@ PUBLIC_DIR = REPO_ROOT / "public"
 ENTSOE_BASELINE_ID = "entsoe"
 TEMPLATE_DIR = REPO_ROOT / "templates"
 WEEKDAYS_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+# „Clean restart" des Wettbewerbs: nur Zieltage AB diesem Datum (UTC) zählen
+# für das obere „Leaderboard" und die „Mittlere … je Team"-Balken — alle
+# Mittelwerte starten dort bei null. Zieltage DAVOR bleiben als eingefrorene
+# „Leaderboard Test Phase" am Seitenende erhalten. Die fortlaufenden Figuren
+# („Prognose vs. Ist-Last", „MAE-Verlauf", „Tagesfehler je Team") laufen über
+# die volle Historie weiter. target_date ist ISO 'YYYY-MM-DD' → der
+# lexikografische Vergleich entspricht dem Datumsvergleich.
+RESTART_DATE = "2026-06-10"
 
 
 def load_teams() -> dict[str, str]:
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return {t["id"]: t["display_name"] for t in data.get("teams") or []}
+
+
+def load_groups() -> dict[str, str]:
+    """Mapping team_id -> Gruppenkürzel (Schlüssel ``group`` in teams.yml).
+
+    Der Schlüssel ist optional; Teams ohne ``group`` (und Pseudo-Teams)
+    erscheinen nicht im Mapping → die Leaderboard-Spalte zeigt einen Strich.
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return {t["id"]: t["group"]
+            for t in (data.get("teams") or []) if t.get("group")}
+
+
+def load_model_cards() -> list[dict[str, str | None]]:
+    """Model-Card-Einträge für die Sektion „About the Models".
+
+    Quelle ist ``teams.yml`` (Single Source of Truth): jedes reguläre Team
+    erhält eine Zeile (``display_name`` + Links), in Dateireihenfolge. Fehlt
+    der optionale Schlüssel ``model_card_link``, ist der Link ``None`` —
+    das Template rendert dann „missing" mit Warn-Icon, damit sichtbar
+    bleibt, wer noch keine Model Card veröffentlicht hat. Der optionale
+    Schlüssel ``software_link`` (Spalte „Software") verweist auf das
+    Reproduzierbarkeits-ZIP der Prognose-Software; ohne ihn rendert die
+    Spalte einen Strich (keine Warnung — freiwillige Angabe). Der optionale
+    Schlüssel ``certified`` (Spalte „Certified") trägt den vom Veranstalter
+    gepflegten Reproduktions-Status: ``"Yes"`` → ✅, sonst (``"No"``/fehlt)
+    ein Strich. Der optionale Schlüssel ``openssf`` (Spalte „OPENSSF")
+    verlinkt die OpenSSF-Scorecard; fehlt er, rendert die Spalte „missing"
+    mit Warn-Icon (analog zur Model Card). Pseudo-Teams (z. B. ``entsoe``)
+    submitten kein eigenes Modell und entfallen.
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return [
+        {"display_name": t["display_name"],
+         "model_card_link": t.get("model_card_link"),
+         "software_link": t.get("software_link"),
+         "certified": t.get("certified"),
+         "openssf": t.get("openssf")}
+        for t in (data.get("teams") or []) if not t.get("pseudo", False)
+    ]
+
+
+def load_model_card_status() -> dict[str, bool | None]:
+    """Model-Card-Status je Team für die Status-Spalte im Leaderboard.
+
+    Gleiche Quelle wie die Sektion „About the Models" (``model_card_link``
+    in ``teams.yml``) — beide bleiben damit automatisch synchron. ``True``
+    = Link veröffentlicht (grüner Haken), ``False`` = fehlt (Warn-Icon),
+    ``None`` für Pseudo-Teams (kein eigenes Modell → Strich statt
+    Warnung).
+    """
+    data = yaml.safe_load(TEAMS_PATH.read_text())
+    return {
+        t["id"]: (None if t.get("pseudo", False)
+                  else bool(t.get("model_card_link")))
+        for t in (data.get("teams") or [])
+    }
 
 
 def load_pseudo_ids() -> set[str]:
@@ -293,7 +358,11 @@ def load_logo_uri(path: Path) -> str:
 
 
 def render(
-    board: pd.DataFrame, daily: dict, figs: dict[str, str], logo_uri: str = "",
+    board: pd.DataFrame, board_test: pd.DataFrame, daily: dict,
+    figs: dict[str, str], logo_uri: str = "",
+    model_cards: list[dict[str, str]] | None = None,
+    model_card_status: dict[str, bool | None] | None = None,
+    groups: dict[str, str] | None = None,
 ) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
@@ -306,16 +375,35 @@ def render(
     # Die ~4.8 MB Plotly-Bibliothek nur einbetten, wenn überhaupt eine Figur
     # gerendert wird (leeres Leaderboard → keine Charts → kein Bundle).
     plotlyjs = get_plotlyjs() if any(figs.values()) else ""
+    # Zwei Ranglisten: ``rows`` = Live-Wettbewerb (oberes „Leaderboard"),
+    # ``rows_test`` = eingefrorene Testphase (Sektion am Seitenende).
     rows = annotate_leaderboard_best(board.to_dict(orient="records"))
+    rows_test = annotate_leaderboard_best(board_test.to_dict(orient="records"))
+    # Status-Spalte: Model Card vorhanden? Gleiche Quelle wie „About the
+    # Models" (teams.yml) — None für Pseudo-Teams und unbekannte Ids.
+    status = model_card_status or {}
+    grp = groups or {}
+    for r in (*rows, *rows_test):
+        r["model_card_status"] = status.get(r["team_id"])
+        r["group"] = grp.get(r["team_id"])
     html = template.render(
         rows=rows,
+        rows_test=rows_test,
         daily=daily,
         figs=figs,
         plotlyjs=plotlyjs,
         logo_uri=logo_uri,
+        model_cards=model_cards or [],
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
     (PUBLIC_DIR / "index.html").write_text(html)
+    # Reproduktions-Zertifikat-Vorlage zum Download bereitstellen: die
+    # Markdown-Vorlage 1:1 nach public/ kopieren (von „About the Models" via
+    # ./Certificate.md verlinkt). Fehlt sie, wird der Schritt übersprungen —
+    # Graceful Degradation wie bei load_logo_uri().
+    cert_src = TEMPLATE_DIR / "Certificate.md"
+    if cert_src.exists():
+        (PUBLIC_DIR / "Certificate.md").write_text(cert_src.read_text())
     (PUBLIC_DIR / "data" / "scores.json").write_text(
         json.dumps(rows, indent=2, default=str)
     )
@@ -345,13 +433,33 @@ def main() -> None:
     pseudo = entsoe_pseudo_scores(actuals, scored)
     if not pseudo.empty:
         scores = pd.concat([scores, pseudo], ignore_index=True)
-    board = aggregate(scores, names)
-    daily = daily_breakdown(scores, names, list(board["team_id"]))
+
+    # Phasen-Trennung (clean restart, s. RESTART_DATE): Mittelwerte des oberen
+    # „Leaderboard" und der „Mittlere … je Team"-Balken zählen nur Live-Tage
+    # (>= RESTART_DATE) und starten bei null; die eingefrorene Testphase
+    # (< RESTART_DATE) erscheint separat am Seitenende. Die fortlaufenden
+    # Figuren (Prognose, MAE-Verlauf, Tagesfehler) nutzen weiter die volle
+    # Historie (``scores``).
+    if not scores.empty:
+        td = scores["target_date"].astype(str)
+        scores_live = scores[td >= RESTART_DATE].copy()
+        scores_test = scores[td < RESTART_DATE].copy()
+    else:
+        scores_live = scores_test = scores
+    board = aggregate(scores_live, names)         # oberes „Leaderboard" (live)
+    board_test = aggregate(scores_test, names)    # „Leaderboard Test Phase"
+    # Zeilen-Reihenfolge der fortgeführten Tages-Tabellen: Voll-Historie-Rang,
+    # damit jedes je bewertete Team gelistet bleibt (das Live-Board ist zum
+    # Start leer und taugt nicht als Reihenfolge).
+    board_full = aggregate(scores, names)
+    daily = daily_breakdown(scores, names, list(board_full["team_id"]))
     figs = build_figures(board, daily, scores, names, actuals)
     logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
-    render(board, daily, figs, logo_uri)
-    print(f"[build] Leaderboard mit {len(board)} Teams "
-          f"({len(daily['dates'])} bewertete Tage) -> public/index.html")
+    render(board, board_test, daily, figs, logo_uri, load_model_cards(),
+           load_model_card_status(), load_groups())
+    print(f"[build] Live-Leaderboard {len(board)} Teams, Testphase "
+          f"{len(board_test)} Teams ({len(daily['dates'])} bewertete Tage) "
+          f"-> public/index.html")
 
 
 if __name__ == "__main__":

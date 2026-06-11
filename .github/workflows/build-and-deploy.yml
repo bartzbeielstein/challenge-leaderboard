@@ -11,6 +11,7 @@ on:
       - "data/actual_load.parquet"
       - "teams.yml"
       - "templates/leaderboard.html.j2"
+      - "templates/Certificate.md"
       - "scripts/build_leaderboard.py"
       - "scripts/charts.py"
       - "logo/spotlogo.png"
