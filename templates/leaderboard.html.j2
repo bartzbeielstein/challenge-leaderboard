@@ -36,6 +36,12 @@
                  padding: 7px 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
     .hero h1 { margin: 0; font-size: 1.8rem; letter-spacing: -.01em; }
     .hero p { margin: 0; color: rgba(255, 255, 255, .88); max-width: 70ch; }
+    .hero .hero-note {
+      margin-top: .8rem; padding: .55rem .9rem; max-width: 78ch;
+      font-size: .9rem; color: rgba(255, 255, 255, .92);
+      background: rgba(255, 255, 255, .12); border-radius: 10px;
+      border-left: 3px solid rgba(255, 255, 255, .55);
+    }
     .hero .stats { margin-top: 1.1rem; display: flex; gap: 2rem; flex-wrap: wrap; }
     .hero .stat b { display: block; font-size: 1.5rem; line-height: 1.1; }
     .hero .stat span { font-size: .8rem; color: rgba(255, 255, 255, .8);
@@ -140,6 +146,12 @@
       DE-Day-Ahead-Lastprognose im Wettbewerb: bewertet über die mittlere
       MAE aller Zieltage (aufsteigend; fehlende Submissions werden per LOCF
       aus der jeweils letzten Prognose fortgeschrieben).
+    </p>
+    <p class="hero-note">
+      📌 ENTSO-E korrigiert veröffentlichte Ist-Lastwerte gelegentlich
+      nachträglich. Betroffene Zieltage werden dann automatisch neu
+      bewertet — die Platzierungen im Leaderboard können sich dadurch
+      auch rückwirkend ändern.
     </p>
     {% if rows %}
     <div class="stats">
@@ -296,6 +308,10 @@
           return y + "-" + String(m + 1).padStart(2, "0");
         }
 
+        function deDate(d) {  // ISO 'YYYY-MM-DD' -> 'DD.MM.YYYY'
+          return d.slice(8, 10) + "." + d.slice(5, 7) + "." + d.slice(0, 4);
+        }
+
         function selectDay(d) {
           selected = d;
           var traces = meta.dayTraces[d] || [];
@@ -303,8 +319,8 @@
             return traces.indexOf(i) !== -1;
           });
           Plotly.update(gd, { visible: vis },
-                        { "title.text": meta.titlePrefix + " — " + d });
-          selLabel.textContent = d;
+                        { "title.text": meta.titlePrefix + " — " + deDate(d) });
+          selLabel.textContent = deDate(d);
           renderGrid();
         }
 
@@ -351,7 +367,7 @@
         prev.addEventListener("click", shiftMonth.bind(null, -1));
         next.addEventListener("click", shiftMonth.bind(null, 1));
 
-        selLabel.textContent = selected;
+        selLabel.textContent = deDate(selected);
         renderGrid();
         wrap.hidden = false;
         // Der Plot wurde in voller Kartenbreite gerendert, bevor der

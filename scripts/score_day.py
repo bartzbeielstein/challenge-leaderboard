@@ -305,13 +305,19 @@ def days_to_score(target_date: str, catch_up: int) -> list[str]:
     return sorted(due)
 
 
-def score_one_day(target_date: str, team_ids: list[str]) -> list[dict]:
+def score_one_day(
+    target_date: str, team_ids: list[str], actual: pd.Series | None = None,
+) -> list[dict]:
     """Fetch actuals for one day and score every team's forecast.
 
     Raises (via `fetch_ground_truth`) if the day's ENTSO-E final actuals
     are not yet available/complete; the caller defers that day.
+    `actual` erlaubt das Scoren gegen eine bereits geladene Serie
+    (Revisions-Pfad in `revise_scores.py` — vermeidet den doppelten
+    ENTSO-E-Abruf).
     """
-    actual = fetch_ground_truth(target_date)
+    if actual is None:
+        actual = fetch_ground_truth(target_date)
     rows: list[dict] = []
     for team_id, path, carried in collect_forecasts(target_date, team_ids):
         try:

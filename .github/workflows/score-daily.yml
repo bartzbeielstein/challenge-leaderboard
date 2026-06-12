@@ -90,6 +90,16 @@ jobs:
         continue-on-error: true
         run: uv run python scripts/fetch_actuals.py --to "${{ steps.target.outputs.date }}"
 
+      - name: ENTSO-E-Revisionen prüfen und ggf. neu bewerten
+        # ENTSO-E korrigiert veröffentlichte Ist-Lastwerte gelegentlich
+        # nachträglich (fehlende TSO-Zonen, implausible Stunden). Vergleicht
+        # die letzten 7 benoteten Tage mit data/actual_load.parquet und
+        # bewertet abweichende Tage neu — Scores und Ist-Load wandern über
+        # denselben PR unten. continue-on-error: best effort wie der
+        # Chart-Schritt; das Fenster wird morgen ohnehin erneut geprüft.
+        continue-on-error: true
+        run: uv run python scripts/revise_scores.py --end "${{ steps.target.outputs.date }}" --window 7
+
       - name: Score-Stand-PR öffnen
         id: cpr
         uses: peter-evans/create-pull-request@v8
@@ -105,6 +115,9 @@ jobs:
           body: |
             Automatisierter Score-Stand für den Zieltag **${{ steps.target.outputs.date }}**,
             inkl. nachgezogener Ist-Load-Daten (`data/actual_load.parquet`) für die Charts.
+            Enthält ggf. Neubewertungen bereits benoteter Tage, falls ENTSO-E
+            Ist-Lastwerte nachträglich korrigiert hat (`scripts/revise_scores.py`,
+            Details im Workflow-Log).
 
             Erzeugt von `.github/workflows/score-daily.yml` (`scripts/score_day.py` +
             `scripts/fetch_actuals.py`).

@@ -143,6 +143,15 @@ def test_forecast_builds_figure_with_actual_and_team_traces():
     assert all(t.visible for t in fig.data)
 
 
+def test_forecast_title_and_axis_use_german_formats():
+    actuals = _actuals("2026-05-26")
+    subs = {"team_4": {"2026-05-26": _sub("2026-05-26")}}
+    fig = charts.fig_forecast_vs_actual(actuals, subs, _scores(), NAMES)
+    assert fig.layout.title.text == "Prognose vs. Ist-Last — 26.05.2026"
+    assert fig.layout.xaxis.tickformat == "%H:%M"
+    assert fig.layout.xaxis.hoverformat == "%d.%m.%Y %H:%M"
+
+
 def test_forecast_includes_entsoe_baseline_trace():
     actuals = _actuals("2026-05-26", with_forecast=True)
     subs = {"team_4": {"2026-05-26": _sub("2026-05-26")}}
@@ -273,6 +282,31 @@ def test_mae_over_time_one_trace_per_team_with_locf_markers():
     hot = next(t for t in fig.data if t.name == "Hot Rod")
     # hot_rod's single point is LOCF-carried -> open marker symbol.
     assert "circle-open" in list(hot.marker.symbol)
+
+
+def test_mae_over_time_uses_chronological_date_axis_german_ticks():
+    # Regression: type="category" ordnete die Tage in Trace-Einfüge-
+    # Reihenfolge — das beste Team (erster Trace) bestimmte die Achse,
+    # ältere Tage späterer Teams landeten hinten. Eine echte Datums-Achse
+    # rendert immer chronologisch; Ticks im deutschen Format.
+    scores = pd.DataFrame([
+        {"team_id": "team_4", "target_date": "2026-06-10", "mae": 100.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+        {"team_id": "team_4", "target_date": "2026-06-11", "mae": 100.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-06", "mae": 200.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-09", "mae": 200.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+    ])
+    fig = charts.fig_mae_over_time(scores, NAMES)
+    assert fig.layout.xaxis.type == "date"
+    assert fig.layout.xaxis.tickformat == "%d.%m.%Y"
+    for t in fig.data:
+        xs = list(pd.to_datetime(t.x))
+        assert xs == sorted(xs)
+    # Deutsches Datum auch im Hover (kein rohes ISO-%{x}).
+    assert all("%{x|%d.%m.%Y}" in t.hovertemplate for t in fig.data)
 
 
 # --------------------------------------------------------------------------
