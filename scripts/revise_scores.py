@@ -23,7 +23,7 @@ benoteten Tag also nie verschlechtern. Nicht benotete Tage sind Sache
 des Catch-up in ``score_day.py``, nicht dieses Skripts.
 
 Aufruf (Workflow, nach dem Tageslauf — best effort):
-    uv run python scripts/revise_scores.py --end 2026-06-11 --window 7
+    uv run python scripts/revise_scores.py --end 2026-06-11 --window 21
 
 Voraussetzung:
     ENTSOE_API_KEY in der Umgebung
