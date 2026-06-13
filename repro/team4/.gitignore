@@ -1,0 +1,9 @@
+# Staged data snapshot + build artifacts: live in the release ZIP, not in git
+# (checksums are pinned in MANIFEST.md / expected/SHA256SUMS).
+data/
+dist/
+.cache/
+.venv/
+submissions/
+figures/
+__pycache__/

@@ -15,7 +15,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -24,20 +24,26 @@ jobs:
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE_SHA" "$HEAD_SHA" -- 'submissions/**')
+          # Drei-Punkte-Diff (merge-base..HEAD) wie die GitHub-PR-Ansicht.
+          # Ein Zwei-Punkte-Diff vergleicht die Trees direkt und rechnet
+          # bei veralteten Forks alles, was sich seit dem Fork-Punkt auf
+          # main geändert hat, dem PR zu — z. B. erschienen nach dem
+          # Entfernen der team_4_entsoe-Submissions (PR #168) die
+          # gelöschten CSVs in Fork-PRs als "added" (PR #169/#171).
+          mapfile -t CHANGED < <(git diff --name-only --diff-filter=A "$BASE_SHA...$HEAD_SHA" -- 'submissions/**')
           if [[ ${#CHANGED[@]} -eq 0 ]]; then
             echo "[validate] PR berührt keine Submission — pass-through (Non-Submission-Änderung)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ ${#CHANGED[@]} -ne 1 ]]; then
-            echo "::error::PR muss genau eine Submission ändern oder hinzufügen (gefunden: ${#CHANGED[@]})."
+            echo "::error::PR muss genau eine neue Submission hinzufügen (gefunden: ${#CHANGED[@]})."
             printf '%s\n' "${CHANGED[@]}" >&2
             exit 1
           fi
           echo "path=${CHANGED[0]}" >> "$GITHUB_OUTPUT"
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
         if: steps.diff.outputs.skip != 'true'
         with:
           enable-cache: true
@@ -56,11 +62,9 @@ jobs:
             --teams teams.yml \
             --pr-author "${{ github.event.pull_request.user.login }}"
 
-      - name: Auto-merge aktivieren
-        if: success()
-        continue-on-error: true
-        uses: peter-evans/enable-pull-request-automerge@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          pull-request-number: ${{ github.event.pull_request.number }}
-          merge-method: squash
+      # Bewusst KEIN Auto-merge hier: Dieser Workflow läuft unter
+      # `pull_request` und führt damit (bei Fork-PRs) ungeprüften Team-Code
+      # aus — deshalb stehen ihm absichtlich keine Secrets / kein
+      # Schreib-Token zur Verfügung. Das Mergen übernimmt `auto-merge.yml`
+      # via `workflow_run` im vertrauenswürdigen Basis-Repo-Kontext, sobald
+      # dieser Validierungslauf grün abschließt.

@@ -19,9 +19,8 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yaml
@@ -29,7 +28,6 @@ import yaml
 
 PATH_RE = re.compile(r"^submissions/(?P<team>[a-z0-9_]+)/(?P<date>\d{4}-\d{2}-\d{2})\.csv$")
 EXPECTED_COLUMNS = ["timestamp_utc", "forecast_mw"]
-DEADLINE_TZ = ZoneInfo("Europe/Berlin")
 
 
 def die(code: int, message: str) -> "None":
@@ -78,11 +76,13 @@ def validate_schema(csv_path: Path, target_date: str) -> None:
 
 def validate_deadline(target_date: str, now_utc: datetime | None = None) -> None:
     now = now_utc or datetime.now(tz=timezone.utc)
-    deadline = datetime.fromisoformat(f"{target_date}T00:00:00") \
-        .replace(tzinfo=DEADLINE_TZ) - pd.Timedelta(minutes=1)
-    # Deadline = D-1 23:59 Europe/Berlin = D 00:00 minus 1 min
-    if now >= deadline.astimezone(timezone.utc):
-        die(2, f"Deadline {deadline.isoformat()} überschritten "
+    # Deadline = D-1 23:59 UTC = Zieltag 00:00 UTC minus 1 Minute.
+    # Alles in UTC — keine lokale Zeitzone (CR: UTC-only).
+    target_midnight = datetime.fromisoformat(f"{target_date}T00:00:00") \
+        .replace(tzinfo=timezone.utc)
+    deadline = target_midnight - timedelta(minutes=1)
+    if now >= deadline:
+        die(2, f"Deadline {deadline.isoformat()} (UTC) überschritten "
                f"(jetzt {now.isoformat()})")
 
 
@@ -91,6 +91,13 @@ def validate_authorship(team_id: str, pr_author: str,
     team = teams.get(team_id)
     if team is None:
         die(3, f"Team '{team_id}' nicht in teams.yml registriert")
+    if team.get("pseudo", False):
+        die(3, f"Team '{team_id}' ist ein Pseudo-Team (Scores werden direkt "
+               f"aus den ENTSO-E-Daten abgeleitet); CSV-Submissions sind "
+               f"nicht erlaubt")
+    if team.get("retired", False):
+        die(3, f"Team '{team_id}' nimmt nicht mehr am Live-Wettbewerb teil "
+               f"(retired in teams.yml); neue Submissions sind nicht erlaubt")
     handles = [h.lower() for h in team.get("github_handles", [])]
     if pr_author.lower() not in handles:
         die(3, f"PR-Autor '{pr_author}' nicht in github_handles für "

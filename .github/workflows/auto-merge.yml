@@ -1,0 +1,78 @@
+name: Auto-merge validated submissions
+
+# Secure counterpart to validate-pr.yml. That workflow runs untrusted
+# fork code under `pull_request` (no secrets). This one runs in the
+# trusted base-repo context via `workflow_run`, so it may use the GitHub
+# App token to merge — WITHOUT ever executing the PR's code. It only acts
+# once the validation run for the same head SHA has finished green.
+on:
+  workflow_run:
+    workflows: ["Validate Submission PR"]
+    types: [completed]
+
+# No write scope on the default token: all writes go through the
+# short-lived GitHub App installation token minted below.
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-merge-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  automerge:
+    # Only for green PR validations — never for pushes or failed runs.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: GitHub-App-Token erzeugen
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Validierten Submission-PR auto-mergen
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          # workflow_run.pull_requests ist bei Fork-PRs leer, und
+          # GET /commits/{sha}/pulls indexiert OFFENE Fork-PRs nicht
+          # zuverlässig (liefert [] — deshalb hat der Bot nie einen
+          # Team-Fork-PR gemergt, nur eigene Branch-PRs). Stattdessen:
+          # offene PRs listen und über die Head-SHA matchen — das
+          # funktioniert für Fork- wie Branch-PRs gleich.
+          PR_JSON=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+                      --jq "[.[] | select(.head.sha == \"$HEAD_SHA\")][0] // empty")
+          if [[ -z "$PR_JSON" ]]; then
+            echo "Kein offener PR für $HEAD_SHA — nichts zu tun."
+            exit 0
+          fi
+          PR=$(jq -r '.number' <<<"$PR_JSON")
+          HEAD_REPO=$(jq -r '.head.repo.full_name' <<<"$PR_JSON")
+
+          # Härtung: nur PRs auto-mergen, die GENAU eine Datei unter
+          # submissions/ ändern. Verhindert, dass ein durchgewinkter
+          # Nicht-Submission-PR (z. B. an scripts/) automatisch landet.
+          mapfile -t FILES < <(gh api --paginate \
+            "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          if [[ ${#FILES[@]} -ne 1 || "${FILES[0]}" != submissions/* ]]; then
+            echo "PR #$PR ist keine reine Submission (${FILES[*]:-keine}) — kein Auto-merge."
+            exit 0
+          fi
+
+          # --delete-branch nur bei Branch-PRs aus dem Basis-Repo: den
+          # Fork-Branch eines Teams kann (und soll) der Bot nicht löschen.
+          EXTRA=()
+          if [[ "$HEAD_REPO" == "$REPO" ]]; then
+            EXTRA+=(--delete-branch)
+          fi
+
+          echo "Aktiviere Auto-merge (squash) für PR #$PR (${FILES[0]}, head: $HEAD_REPO)."
+          gh pr merge "$PR" --repo "$REPO" --squash --auto "${EXTRA[@]}"
