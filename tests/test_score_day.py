@@ -75,6 +75,8 @@ def teams_yml_file(tmp_path):
             {"id": "hot_rod", "display_name": "Hot Rod", "github_handles": ["b"]},
             {"id": "ghost", "display_name": "Ghost", "github_handles": ["c"]},
             {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
+            {"id": "legacy", "display_name": "Legacy",
+             "github_handles": ["d"], "retired": True},
         ]
     }))
 
@@ -148,6 +150,18 @@ def test_pseudo_team_never_scored_even_with_submission_dir(
     assert "entsoe" not in sd.load_team_ids()
     forecasts = sd.collect_forecasts("2026-05-26", sd.load_team_ids())
     assert all(t != "entsoe" for t, _, _ in forecasts)
+
+
+def test_retired_team_never_scored_even_with_submission_dir(
+    write_submission, teams_yml_file
+):
+    # Retired teams (replaced by a successor) leave the live competition:
+    # neither fresh submissions nor LOCF carry-forwards may be scored —
+    # their historical rows in scores.parquet stay untouched.
+    write_submission("legacy", "2026-05-26")
+    assert "legacy" not in sd.load_team_ids()
+    forecasts = sd.collect_forecasts("2026-05-26", sd.load_team_ids())
+    assert all(t != "legacy" for t, _, _ in forecasts)
 
 
 def test_main_writes_parquet_with_expected_rows(

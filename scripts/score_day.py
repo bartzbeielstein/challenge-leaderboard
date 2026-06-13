@@ -217,18 +217,20 @@ def score_submission(forecast_values: np.ndarray, actual: pd.Series) -> dict:
 
 
 def load_team_ids() -> list[str]:
-    """Team-Ids aus teams.yml — ohne Pseudo-Teams.
+    """Team-Ids aus teams.yml — ohne Pseudo-Teams und ohne Retired-Teams.
 
     Pseudo-Teams (``pseudo: true``, z. B. ``entsoe``) submitten keine CSVs;
     ihre Scores leitet ``build_leaderboard.py`` zur Build-Zeit direkt aus
     den ENTSO-E-Daten ab. Sie hier auszuschließen verhindert auch, dass
     ein versehentlich wieder angelegtes ``submissions/<id>/``-Verzeichnis
-    per LOCF gescort würde.
+    per LOCF gescort würde. Retired-Teams (``retired: true``, z. B. durch
+    Nachfolger ersetzt) werden ab dem Rückzug nicht mehr benotet — weder
+    frisch noch per LOCF; ihre historischen Scores bleiben unberührt.
     """
     data = yaml.safe_load(TEAMS_PATH.read_text()) or {}
     return sorted(
         t["id"] for t in (data.get("teams") or [])
-        if not t.get("pseudo", False)
+        if not t.get("pseudo", False) and not t.get("retired", False)
     )
 
 
@@ -303,13 +305,19 @@ def days_to_score(target_date: str, catch_up: int) -> list[str]:
     return sorted(due)
 
 
-def score_one_day(target_date: str, team_ids: list[str]) -> list[dict]:
+def score_one_day(
+    target_date: str, team_ids: list[str], actual: pd.Series | None = None,
+) -> list[dict]:
     """Fetch actuals for one day and score every team's forecast.
 
     Raises (via `fetch_ground_truth`) if the day's ENTSO-E final actuals
     are not yet available/complete; the caller defers that day.
+    `actual` erlaubt das Scoren gegen eine bereits geladene Serie
+    (Revisions-Pfad in `revise_scores.py` — vermeidet den doppelten
+    ENTSO-E-Abruf).
     """
-    actual = fetch_ground_truth(target_date)
+    if actual is None:
+        actual = fetch_ground_truth(target_date)
     rows: list[dict] = []
     for team_id, path, carried in collect_forecasts(target_date, team_ids):
         try:

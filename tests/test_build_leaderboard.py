@@ -91,10 +91,11 @@ def test_annotate_leaderboard_best_marks_columnwise_winners():
 
 def test_main_writes_html_and_json(tmp_path):
     _seed_teams(tmp_path)
+    # Zieltage >= RESTART_DATE -> Live-Leaderboard (scores.json = Live-Wertung).
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1},
-        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+        {"team_id": "hot_rod", "target_date": "2026-06-26", "mae": 200.0,
          "rmse": 200.0, "mape": 0.2},
     ])
     bl.main()
@@ -202,8 +203,10 @@ def test_main_writes_daily_section_in_html(tmp_path):
     assert 'data-week="2026-W22"' in html
     # Tagesbeste fett: je Spalte genau eine best-Zelle, in allen 5 Tabellen
     # (hier 2 Spalten mit jeweils genau einem Wert -> 5 x 2). Nur den
-    # Tagesfehler-Teil zählen — das Leaderboard hat eigene best-Zellen.
-    daily_html = html[html.index("Tagesfehler je Team [MAE]"):]
+    # Tagesfehler-Teil zählen — beide Leaderboards haben eigene best-Zellen
+    # (die Testphase steht direkt darunter).
+    daily_html = html[html.index("Tagesfehler je Team [MAE]"):
+                      html.index("<h2>Leaderboard Test Phase</h2>")]
     assert daily_html.count('class="num best"') == 10
     daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
     assert daily["dates"] == ["2026-05-12", "2026-05-26"]
@@ -244,10 +247,12 @@ def _write_submission(tmp_path, team: str, date: str):
 
 def test_main_embeds_charts_but_not_forecast_without_actuals(tmp_path):
     _seed_teams(tmp_path)
+    # Zieltage >= RESTART_DATE -> die „Mittlere … je Team"-Balken (Live-Board)
+    # sind befüllt; vor dem Neustart wären sie leer und die Sektionen entfielen.
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1, "carried_forward": False},
-        {"team_id": "hot_rod", "target_date": "2026-05-26", "mae": 200.0,
+        {"team_id": "hot_rod", "target_date": "2026-06-26", "mae": 200.0,
          "rmse": 200.0, "mape": 0.2, "carried_forward": False},
     ])
     bl.main()
@@ -488,25 +493,56 @@ def test_about_the_models_links_certificate(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# Leaderboard "Status" column — same source as "About the Models".
+# Leaderboard "Status" column — same source as "About the Models". Green
+# only if ALL three artifacts are present: Model Card, Software, Certified.
 # --------------------------------------------------------------------------
 
-def test_load_model_card_status_true_false_none(tmp_path):
+def _seed_teams_with_artifacts(tmp_path: Path, url: str):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": [],
+             "model_card_link": url, "software_link": ZIP_URL,
+             "certified": "Yes"},     # alle drei Artefakte -> Haken
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": []},   # nichts -> Warnung
+        ]
+    }))
+
+
+def test_load_artifact_status_requires_all_three(tmp_path):
+    import yaml
     url = "https://example.org/MODEL_CARD.md"
-    _seed_teams_with_model_card(tmp_path, url)
-    assert bl.load_model_card_status() == {"team_4": True, "hot_rod": False}
+    full = {"model_card_link": url, "software_link": ZIP_URL,
+            "certified": "Yes"}
+    teams = [{"id": "all", "display_name": "All", "github_handles": [],
+              **full}]
+    # Je ein Team, dem genau ein Artefakt fehlt -> immer Warnung.
+    for missing in full:
+        partial = {k: v for k, v in full.items() if k != missing}
+        teams.append({"id": f"no_{missing}", "display_name": missing,
+                      "github_handles": [], **partial})
+    teams.append({"id": "cert_no", "display_name": "CertNo",
+                  "github_handles": [], **{**full, "certified": "No"}})
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({"teams": teams}))
+    status = bl.load_artifact_status()
+    assert status["all"] is True
+    assert status["no_model_card_link"] is False
+    assert status["no_software_link"] is False
+    assert status["no_certified"] is False
+    assert status["cert_no"] is False
 
 
-def test_load_model_card_status_pseudo_is_none(tmp_path):
+def test_load_artifact_status_pseudo_is_none(tmp_path):
     _seed_teams(tmp_path)  # includes pseudo team "entsoe"
-    status = bl.load_model_card_status()
+    status = bl.load_artifact_status()
     assert status["entsoe"] is None
     assert status["team_4"] is False
 
 
 def test_main_leaderboard_status_column(tmp_path):
     url = "https://example.org/MODEL_CARD.md"
-    _seed_teams_with_model_card(tmp_path, url)
+    _seed_teams_with_artifacts(tmp_path, url)
     _seed(tmp_path, [
         {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1},
@@ -520,13 +556,31 @@ def test_main_leaderboard_status_column(tmp_path):
     # Header: Status sits between Team and Mean MAE.
     head = table[:table.index("</thead>")]
     assert head.index(">Team<") < head.index(">Status<") < head.index("Mean MAE")
-    # Team 4 has a model_card_link -> check mark; Hot Rod lacks one -> warning.
+    # Team 4 has all three artifacts -> check mark; Hot Rod none -> warning.
     row4 = table[table.index("<td>Team 4</td>"):]
     row4 = row4[:row4.index("</tr>")]
     assert "✅" in row4 and "⚠️" not in row4
     rowhr = table[table.index("<td>Hot Rod</td>"):]
     rowhr = rowhr[:rowhr.index("</tr>")]
     assert "⚠️" in rowhr and "✅" not in rowhr
+
+
+def test_main_leaderboard_status_warns_without_certified(tmp_path):
+    # Model Card + Software allein reichen nicht mehr: ohne
+    # certified == "Yes" zeigt die Status-Spalte das Warn-Icon.
+    url = "https://example.org/MODEL_CARD.md"
+    _seed_teams_with_model_card(tmp_path, url)   # team_4: Card+ZIP, kein Cert
+    _seed(tmp_path, [
+        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1},
+    ])
+    bl.main()
+    html = (tmp_path / "public" / "index.html").read_text()
+    table = html[html.index('<table class="ranking">'):]
+    table = table[:table.index("</table>")]
+    row4 = table[table.index("<td>Team 4</td>"):]
+    row4 = row4[:row4.index("</tr>")]
+    assert "⚠️" in row4 and "✅" not in row4
 
 
 def test_main_leaderboard_status_dash_for_pseudo(tmp_path):
@@ -544,6 +598,116 @@ def test_main_leaderboard_status_dash_for_pseudo(tmp_path):
     row = row[:row.index("</tr>")]
     assert '<td class="status na"' in row     # dash, not a warning
     assert "⚠️" not in row and "✅" not in row
+
+
+# --------------------------------------------------------------------------
+# Live phase: only teams with a FRESH submission since RESTART_DATE — LOCF
+# carry-forward rows alone do not qualify (clean cut vs. the test phase).
+# --------------------------------------------------------------------------
+
+def test_filter_live_teams_drops_locf_only_teams():
+    scores = pd.DataFrame([
+        {"team_id": "team_4", "target_date": "2026-06-10", "mae": 100.0,
+         "carried_forward": False},
+        {"team_id": "team_4", "target_date": "2026-06-11", "mae": 120.0,
+         "carried_forward": True},   # LOCF eines Live-Teams bleibt (Strafe)
+        {"team_id": "team_4_optuna", "target_date": "2026-06-10", "mae": 90.0,
+         "carried_forward": True},   # nur LOCF -> raus aus der Live-Wertung
+    ])
+    out = bl.filter_live_teams(scores)
+    assert set(out["team_id"]) == {"team_4"}
+    assert len(out) == 2
+
+
+def test_filter_live_teams_missing_column_or_nan_counts_as_fresh():
+    no_col = pd.DataFrame([{"team_id": "team_4",
+                            "target_date": "2026-06-10", "mae": 100.0}])
+    assert bl.filter_live_teams(no_col).equals(no_col)
+    nan_row = pd.DataFrame([{"team_id": "entsoe",
+                             "target_date": "2026-06-10", "mae": 100.0,
+                             "carried_forward": None}])
+    assert list(bl.filter_live_teams(nan_row)["team_id"]) == ["entsoe"]
+
+
+def test_main_live_board_excludes_locf_only_team(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        # Testphase: beide Teams mit frischen Einreichungen.
+        {"team_id": "team_4", "target_date": "2026-06-07", "mae": 150.0,
+         "rmse": 150.0, "mape": 0.15, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-07", "mae": 250.0,
+         "rmse": 250.0, "mape": 0.25, "carried_forward": False},
+        # Live-Phase: team_4 frisch, hot_rod nur per LOCF fortgeschrieben.
+        {"team_id": "team_4", "target_date": "2026-06-10", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-10", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2, "carried_forward": True},
+    ])
+    bl.main()
+    # Live-Wertung (scores.json = Live-Board): nur team_4 — hot_rod hat ab
+    # RESTART_DATE keine frische Einreichung.
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    assert [r["team_id"] for r in data] == ["team_4"]
+    # Volle Historie unverändert: hot_rod bleibt in den Tagesfehler-Tabellen
+    # und im eingefrorenen Testphasen-Board.
+    daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
+    assert "hot_rod" in [t["team_id"] for t in daily["teams"]]
+    html = (tmp_path / "public" / "index.html").read_text()
+    test_board = html[html.index("Leaderboard Test Phase"):]
+    assert "Hot Rod" in test_board
+
+
+# --------------------------------------------------------------------------
+# Retired teams (retired: true, e.g. replaced by a successor): out of the
+# live board and "About the Models"; test phase and full history remain.
+# --------------------------------------------------------------------------
+
+def _seed_teams_with_retired(tmp_path: Path):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": []},
+            {"id": "hot_rod", "display_name": "Hot Rod",
+             "github_handles": [], "retired": True},
+            {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
+        ]
+    }))
+
+
+def test_load_retired_ids_reads_flag(tmp_path):
+    _seed_teams_with_retired(tmp_path)
+    assert bl.load_retired_ids() == {"hot_rod"}
+
+
+def test_load_model_cards_skips_retired_teams(tmp_path):
+    _seed_teams_with_retired(tmp_path)
+    names = [mc["display_name"] for mc in bl.load_model_cards()]
+    assert names == ["Team 4"]   # weder Pseudo- noch Retired-Teams
+
+
+def test_main_live_board_excludes_retired_team(tmp_path):
+    _seed_teams_with_retired(tmp_path)
+    _seed(tmp_path, [
+        # Testphase: beide Teams aktiv.
+        {"team_id": "team_4", "target_date": "2026-06-07", "mae": 150.0,
+         "rmse": 150.0, "mape": 0.15, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-07", "mae": 250.0,
+         "rmse": 250.0, "mape": 0.25, "carried_forward": False},
+        # Live-Phase: auch eine FRISCHE Zeile des Retired-Teams zählt nicht.
+        {"team_id": "team_4", "target_date": "2026-06-10", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-10", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2, "carried_forward": False},
+    ])
+    bl.main()
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    assert [r["team_id"] for r in data] == ["team_4"]
+    # Testphase und volle Historie behalten das Retired-Team.
+    daily = json.loads((tmp_path / "public" / "data" / "daily.json").read_text())
+    assert "hot_rod" in [t["team_id"] for t in daily["teams"]]
+    html = (tmp_path / "public" / "index.html").read_text()
+    test_board = html[html.index("Leaderboard Test Phase"):]
+    assert "Hot Rod" in test_board
 
 
 # --------------------------------------------------------------------------
@@ -607,12 +771,12 @@ def test_entsoe_pseudo_authoritative_overrides_parquet(tmp_path):
     # submission) must be IGNORED — the derived value wins.
     _seed_teams(tmp_path)
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1, "carried_forward": False},
-        {"team_id": "entsoe", "target_date": "2026-05-26", "mae": 42.0,
+        {"team_id": "entsoe", "target_date": "2026-06-26", "mae": 42.0,
          "rmse": 42.0, "mape": 0.04, "carried_forward": True},
     ])
-    _write_actuals(tmp_path, "2026-05-26")        # forecast = load-10 -> MAE 10
+    _write_actuals(tmp_path, "2026-06-26")        # forecast = load-10 -> MAE 10
     bl.main()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     entsoe = next(r for r in data if r["team_id"] == "entsoe")
@@ -624,11 +788,12 @@ def test_entsoe_pseudo_authoritative_overrides_parquet(tmp_path):
 
 def test_main_ranks_entsoe_pseudo_in_leaderboard(tmp_path):
     _seed_teams(tmp_path)
+    # Zieltag >= RESTART_DATE -> entsoe-Pseudo-Team im Live-Leaderboard.
     _seed(tmp_path, [
-        {"team_id": "team_4", "target_date": "2026-05-26", "mae": 100.0,
+        {"team_id": "team_4", "target_date": "2026-06-26", "mae": 100.0,
          "rmse": 100.0, "mape": 0.1, "carried_forward": False},
     ])
-    _write_actuals(tmp_path, "2026-05-26")        # carries entsoe_forecast_mw
+    _write_actuals(tmp_path, "2026-06-26")        # carries entsoe_forecast_mw
     bl.main()
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert "entsoe" in [r["team_id"] for r in data]

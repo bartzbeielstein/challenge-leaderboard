@@ -26,6 +26,14 @@
 #                                          # (Spalte "OpenSSF" in "About the
 #                                          # Models"); ohne ihn "missing" + Warn-
 #                                          # Icon (analog zur Model Card)
+#       retired: true                      # optional: Team nimmt nicht mehr am
+#                                          # Live-Wettbewerb teil (z. B. durch
+#                                          # Nachfolger ersetzt). Neue Submissions
+#                                          # werden abgelehnt, score_day benotet
+#                                          # nicht mehr (auch kein LOCF), das
+#                                          # Live-Leaderboard und "About the
+#                                          # Models" listen das Team nicht;
+#                                          # Testphase und Historie bleiben.
 #
 # Lehrende pflegen diese Datei manuell nach Eingang der Anmeldung.
 # Jedes Team hat einen ENTSO-E-Geschwister-Eintrag <id>_entsoe (gleiche
@@ -70,8 +78,35 @@ teams:
     group: "--"
     certified: "No"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
+    retired: true   # ab 2026-06-10 ersetzt durch team_4_4zones
+  - id: chronos
+    display_name: "chronos"
+    github_handles: [bartzbeielstein]
+    group: "--"
+    certified: "No"
+  - id: team_4_ch14
+    display_name: "Team 4 SpotOptim (Ch 14)"
+    github_handles: [bartzbeielstein]
+    group: "--"
+    certified: "No"
+    retired: true   # nicht bewertet, nur demo aus Ch. 14
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
+    github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    group: "--"
+    certified: "No"
+    retired: true   # ab 2026-06-10 ersetzt durch team_4_entsoe_4zones
+  - id: team_4_4zones
+    display_name: "Team 4 Zones SpotOptim"
+    github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
+    group: "--"
+    certified: "No"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
+  - id: team_4_entsoe_4zones
+    display_name: "Team 4 Zones SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
