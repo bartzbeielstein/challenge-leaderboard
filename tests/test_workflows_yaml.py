@@ -58,6 +58,17 @@ def test_score_daily_uses_catch_up():
     )
 
 
+def test_score_daily_checks_entsoe_revisions():
+    # ENTSO-E korrigiert Ist-Lastwerte nachträglich; der Tageslauf muss das
+    # rückwärtige Fenster prüfen und abweichende Tage neu bewerten — sonst
+    # bleiben gegen implausible Daten benotete Tage für immer falsch.
+    body = (WF / "score-daily.yml").read_text()
+    assert "revise_scores.py" in body, (
+        "score-daily.yml must run scripts/revise_scores.py so that "
+        "ENTSO-E load corrections trigger a re-evaluation."
+    )
+
+
 def test_build_and_deploy_listens_to_score_daily_name_exact():
     sd = _load("score-daily.yml")
     bd = _load("build-and-deploy.yml")
@@ -105,6 +116,12 @@ def test_validate_pr_is_not_pull_request_target():
     wf = _load("validate-pr.yml")
     on = wf[True] if True in wf else wf["on"]
     assert "pull_request_target" not in on
+
+
+def test_validate_pr_counts_only_new_submission_files():
+    body = (WF / "validate-pr.yml").read_text()
+    assert "--diff-filter=A" in body
+    assert "genau eine neue Submission hinzufügen" in body
 
 
 def test_ci_workflow_runs_pytest_and_actionlint():

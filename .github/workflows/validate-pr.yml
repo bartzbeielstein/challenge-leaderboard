@@ -30,14 +30,14 @@ jobs:
           # main geändert hat, dem PR zu — z. B. erschienen nach dem
           # Entfernen der team_4_entsoe-Submissions (PR #168) die
           # gelöschten CSVs in Fork-PRs als "added" (PR #169/#171).
-          mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE_SHA...$HEAD_SHA" -- 'submissions/**')
+          mapfile -t CHANGED < <(git diff --name-only --diff-filter=A "$BASE_SHA...$HEAD_SHA" -- 'submissions/**')
           if [[ ${#CHANGED[@]} -eq 0 ]]; then
             echo "[validate] PR berührt keine Submission — pass-through (Non-Submission-Änderung)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ ${#CHANGED[@]} -ne 1 ]]; then
-            echo "::error::PR muss genau eine Submission ändern oder hinzufügen (gefunden: ${#CHANGED[@]})."
+            echo "::error::PR muss genau eine neue Submission hinzufügen (gefunden: ${#CHANGED[@]})."
             printf '%s\n' "${CHANGED[@]}" >&2
             exit 1
           fi

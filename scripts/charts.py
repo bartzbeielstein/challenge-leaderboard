@@ -32,6 +32,11 @@ def _team_color(i: int) -> str:
     return TEAM_COLORS[i % len(TEAM_COLORS)]
 
 
+def _de_date(iso_date: str) -> str:
+    """ISO-Datum 'YYYY-MM-DD' → deutsches Format 'DD.MM.YYYY'."""
+    return f"{iso_date[8:10]}.{iso_date[5:7]}.{iso_date[0:4]}"
+
+
 def _base_layout(fig: go.Figure, *, title: str, yaxis_title: str) -> None:
     fig.update_layout(
         title=title,
@@ -199,8 +204,11 @@ def fig_forecast_vs_actual(
     for i in day_trace_idx[default_day]:
         fig.data[i].visible = True
 
-    _base_layout(fig, title=f"Prognose vs. Ist-Last — {default_day}",
+    _base_layout(fig, title=f"Prognose vs. Ist-Last — {_de_date(default_day)}",
                  yaxis_title="Last [MW]")
+    # Deutsche Achsen-/Hover-Formate: Ticks als Uhrzeit (das Datum steht im
+    # Titel), Unified-Hover-Kopf als 'DD.MM.YYYY HH:MM'.
+    fig.update_xaxes(tickformat="%H:%M", hoverformat="%d.%m.%Y %H:%M")
     # Daten fürs Kalender-Widget im Template (CR-2: days sortiert,
     # day_trace_idx in Einfüge- = Sortierreihenfolge).
     fig.update_layout(meta=dict(
@@ -329,16 +337,22 @@ def fig_mae_over_time(
         symbols = ["circle-open" if c else "circle"
                    for c in g["carried_forward"]]
         fig.add_trace(go.Scatter(
-            x=g["target_date"], y=g["mae"], mode="lines+markers",
+            x=pd.to_datetime(g["target_date"]), y=g["mae"],
+            mode="lines+markers",
             name=names.get(team_id, team_id),
             line=dict(color=_team_color(ci), width=2),
             marker=dict(size=8, symbol=symbols,
                         line=dict(color=_team_color(ci), width=1.5)),
             hovertemplate=(names.get(team_id, team_id)
-                           + "<br>%{x}: MAE %{y:.0f} MW<extra></extra>"),
+                           + "<br>%{x|%d.%m.%Y}: MAE %{y:.0f} MW"
+                           + "<extra></extra>"),
         ))
     _base_layout(fig, title="MAE-Verlauf je Team", yaxis_title="MAE [MW]")
-    fig.update_xaxes(type="category")
+    # Echte Datums-Achse (keine Kategorien!): Kategorien erscheinen in
+    # Trace-Einfüge-Reihenfolge — Teams mit unterschiedlichen Tagesmengen
+    # brachten die Tage damit durcheinander. Ticks im deutschen Format.
+    fig.update_xaxes(type="date", tickformat="%d.%m.%Y",
+                     hoverformat="%d.%m.%Y")
     return fig
 
 

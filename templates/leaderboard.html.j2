@@ -36,6 +36,12 @@
                  padding: 7px 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
     .hero h1 { margin: 0; font-size: 1.8rem; letter-spacing: -.01em; }
     .hero p { margin: 0; color: rgba(255, 255, 255, .88); max-width: 70ch; }
+    .hero .hero-note {
+      margin-top: .8rem; padding: .55rem .9rem; max-width: 78ch;
+      font-size: .9rem; color: rgba(255, 255, 255, .92);
+      background: rgba(255, 255, 255, .12); border-radius: 10px;
+      border-left: 3px solid rgba(255, 255, 255, .55);
+    }
     .hero .stats { margin-top: 1.1rem; display: flex; gap: 2rem; flex-wrap: wrap; }
     .hero .stat b { display: block; font-size: 1.5rem; line-height: 1.1; }
     .hero .stat span { font-size: .8rem; color: rgba(255, 255, 255, .8);
@@ -114,6 +120,18 @@
                      font-weight: 600; cursor: pointer; }
     .cal-day.avail:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
     .cal-day.sel { background: var(--accent); color: #fff; }
+    /* Sicht-Umschalter fürs Forecast-Chart: alle Prognosen vs. nur Ist-Last. */
+    .fig-toolbar { display: flex; align-items: center; flex-wrap: wrap;
+                   gap: .5rem; margin: 0 0 .8rem; }
+    .fig-toolbar-label { font-size: .85rem; color: var(--muted); font-weight: 600; }
+    .fig-btn {
+      padding: .35rem .85rem; font: inherit; font-size: .85rem; font-weight: 600;
+      color: var(--ink); background: var(--card); border: 1px solid var(--line);
+      border-radius: 999px; cursor: pointer;
+    }
+    .fig-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .fig-btn.active { background: var(--accent); border-color: var(--accent);
+                      color: #fff; }
     .rank-badge { display: inline-block; min-width: 1.5rem; text-align: center;
                   font-weight: 600; }
     /* Wochen-Umschalter der Tagesfehler-Tabellen; Datums-Header behalten
@@ -140,6 +158,12 @@
       DE-Day-Ahead-Lastprognose im Wettbewerb: bewertet über die mittlere
       MAE aller Zieltage (aufsteigend; fehlende Submissions werden per LOCF
       aus der jeweils letzten Prognose fortgeschrieben).
+    </p>
+    <p class="hero-note">
+      📌 ENTSO-E korrigiert veröffentlichte Ist-Lastwerte gelegentlich
+      nachträglich. Betroffene Zieltage werden dann automatisch neu
+      bewertet — die Platzierungen im Leaderboard können sich dadurch
+      auch rückwirkend ändern.
     </p>
     {% if rows %}
     <div class="stats">
@@ -245,6 +269,11 @@
       ENTSO-E-Day-ahead-Prognose als Referenz-Baseline. Zieltag über den
       Kalender wählbar.
     </p>
+    <div class="fig-toolbar" id="forecast-toolbar" hidden>
+      <span class="fig-toolbar-label">Anzeige:</span>
+      <button type="button" class="fig-btn" id="forecast-show-all">Alle Prognosen</button>
+      <button type="button" class="fig-btn" id="forecast-only-actual">Nur Ist-Last</button>
+    </div>
     <div class="fig-cal-row">
       <div class="fig-cal-plot">{{ figs.forecast | safe }}</div>
       <div class="cal-wrap" id="cal-forecast" hidden>
@@ -277,7 +306,47 @@
         }
         var meta = gd.layout.meta;
         var days = meta.days || [];
-        if (days.length < 2) { return; }  // nichts zu wählen
+        if (!days.length) { return; }  // keine Tage -> nichts zu steuern
+
+        function deDate(d) {  // ISO 'YYYY-MM-DD' -> 'DD.MM.YYYY'
+          return d.slice(8, 10) + "." + d.slice(5, 7) + "." + d.slice(0, 4);
+        }
+
+        // Sicht-Umschalter: alle Prognosen vs. nur Ist-Last (= erste Tagesspur,
+        // s. charts.fig_forecast_vs_actual). Der Modus bleibt beim Tageswechsel
+        // erhalten und funktioniert auch bei nur einem Tag (der Kalender unten
+        // erscheint erst ab zwei Tagen).
+        var onlyActual = false;
+        var currentDay = days[days.length - 1];
+        var btnAll = document.getElementById("forecast-show-all");
+        var btnActual = document.getElementById("forecast-only-actual");
+        var toolbar = document.getElementById("forecast-toolbar");
+
+        function applyVisibility() {
+          var traces = meta.dayTraces[currentDay] || [];
+          var actualIdx = traces.length ? traces[0] : -1;  // Ist-Last
+          var vis = gd.data.map(function (_, i) {
+            if (traces.indexOf(i) === -1) { return false; }  // anderer Zieltag
+            return onlyActual ? (i === actualIdx) : true;
+          });
+          Plotly.update(gd, { visible: vis },
+                        { "title.text": meta.titlePrefix + " — " + deDate(currentDay) });
+          if (btnAll) { btnAll.classList.toggle("active", !onlyActual); }
+          if (btnActual) { btnActual.classList.toggle("active", onlyActual); }
+        }
+
+        if (btnAll && btnActual) {
+          btnAll.addEventListener("click", function () {
+            onlyActual = false; applyVisibility();
+          });
+          btnActual.addEventListener("click", function () {
+            onlyActual = true; applyVisibility();
+          });
+          btnAll.classList.add("active");  // Start: alle Prognosen sichtbar
+          if (toolbar) { toolbar.hidden = false; }
+        }
+
+        if (days.length < 2) { return; }  // Kalender erst ab zwei Tagen
 
         var wrap = document.getElementById("cal-forecast");
         var selLabel = document.getElementById("cal-forecast-sel");
@@ -288,8 +357,7 @@
 
         var avail = {};
         days.forEach(function (d) { avail[d] = true; });
-        var selected = days[days.length - 1];
-        var view = { y: +selected.slice(0, 4), m: +selected.slice(5, 7) - 1 };
+        var view = { y: +currentDay.slice(0, 4), m: +currentDay.slice(5, 7) - 1 };
         var minKey = days[0].slice(0, 7), maxKey = days[days.length - 1].slice(0, 7);
 
         function monthKey(y, m) {
@@ -297,14 +365,9 @@
         }
 
         function selectDay(d) {
-          selected = d;
-          var traces = meta.dayTraces[d] || [];
-          var vis = gd.data.map(function (_, i) {
-            return traces.indexOf(i) !== -1;
-          });
-          Plotly.update(gd, { visible: vis },
-                        { "title.text": meta.titlePrefix + " — " + d });
-          selLabel.textContent = d;
+          currentDay = d;
+          applyVisibility();
+          selLabel.textContent = deDate(d);
           renderGrid();
         }
 
@@ -333,7 +396,7 @@
             btn.textContent = day;
             if (avail[iso]) {
               btn.classList.add("avail");
-              if (iso === selected) { btn.classList.add("sel"); }
+              if (iso === currentDay) { btn.classList.add("sel"); }
               btn.addEventListener("click", selectDay.bind(null, iso));
             } else {
               btn.disabled = true;
@@ -351,7 +414,7 @@
         prev.addEventListener("click", shiftMonth.bind(null, -1));
         next.addEventListener("click", shiftMonth.bind(null, 1));
 
-        selLabel.textContent = selected;
+        selLabel.textContent = deDate(currentDay);
         renderGrid();
         wrap.hidden = false;
         // Der Plot wurde in voller Kartenbreite gerendert, bevor der
