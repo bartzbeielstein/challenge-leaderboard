@@ -81,13 +81,14 @@
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
-    /* Kalender-Datumswahl fürs Forecast-Chart — permanent geöffnet,
-       rechts neben dem Plot (auf schmalen Screens darunter umbrechend);
-       eigener Flex-Bereich, überlappt den Plot nie. */
-    .fig-cal-row { display: flex; align-items: flex-start; gap: 1.1rem;
-                   flex-wrap: wrap; }
-    .fig-cal-plot { flex: 1 1 480px; min-width: 0; }
+    /* Kalender-Datumswahl fürs Forecast-Chart — permanent geöffnet. Der Plot
+       nimmt die volle Breite ein; der Kalender sitzt darunter rechtsbündig,
+       auf Höhe der (vollbreiten) Plot-Legende. Auf schmalen Screens zentriert. */
+    .fig-cal-row { display: block; }
+    .fig-cal-plot { width: 100%; min-width: 0; }
+    .cal-row { display: flex; justify-content: flex-end; }
     .cal-wrap { flex: 0 0 auto; }
+    @media (max-width: 760px) { .cal-row { justify-content: center; } }
     .cal {
       padding: .8rem .9rem; width: max-content;
       background: var(--card); border: 1px solid var(--line);
@@ -259,6 +260,7 @@
     </p>
     <div class="fig-cal-row">
       <div class="fig-cal-plot">{{ figs.forecast | safe }}</div>
+      <div class="cal-row">
       <div class="cal-wrap" id="cal-forecast" hidden>
         <div class="cal" id="cal-forecast-panel" role="group" aria-label="Zieltag wählen">
           <p class="cal-sel">Zieltag: <span id="cal-forecast-sel"></span></p>
@@ -271,6 +273,7 @@
           </div>
           <div class="cal-grid" id="cal-forecast-grid"></div>
         </div>
+      </div>
       </div>
     </div>
     <script>
