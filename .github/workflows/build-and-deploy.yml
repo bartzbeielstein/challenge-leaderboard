@@ -8,9 +8,15 @@ on:
     branches: [main]
     paths:
       - "data/scores.parquet"
+      - "data/actual_load.parquet"
       - "teams.yml"
       - "templates/leaderboard.html.j2"
+      - "templates/Certificate.md"
       - "scripts/build_leaderboard.py"
+      - "scripts/charts.py"
+      - "logo/spotlogo.png"
+      - "pyproject.toml"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:
