@@ -1,9 +1,9 @@
 """
 validate_submission.py
 
-Prüft eine Submission-CSV auf Schema, Pfad-Konvention, Deadline und
-Team-Berechtigung. Wird sowohl im PR-Workflow als auch lokal (vor dem
-Push) aufgerufen.
+Thin CLI wrapper around challenge_leaderboard.validation. Prüft eine
+Submission-CSV auf Schema, Pfad-Konvention, Deadline und Team-Berechtigung.
+Wird sowohl im PR-Workflow als auch lokal (vor dem Push) aufgerufen.
 
 Exit-Codes:
   0  --- alle Checks bestanden
@@ -13,96 +13,74 @@ Exit-Codes:
 
 CR-3: jede Verletzung beendet das Programm mit nicht-null-Code und
 einer eindeutigen Fehlerzeile auf stderr; keine stille Imputation.
+
+Module-level names (PATH_RE, EXPECTED_COLUMNS, parse_path,
+validate_schema, validate_deadline, validate_authorship, load_teams) are
+preserved as shims so that existing test code importing this module
+with ``import validate_submission as vs`` continues to work unchanged.
 """
 from __future__ import annotations
 
 import argparse
-import re
 import sys
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pandas as pd
-import yaml
+from challenge_leaderboard import validation as _v
+from challenge_leaderboard.teams import load_teams  # re-export for tests
+
+# ---------------------------------------------------------------------------
+# Constants — re-exported from the library so ``vs.PATH_RE`` keeps working.
+# ---------------------------------------------------------------------------
+
+PATH_RE = _v.PATH_RE
+EXPECTED_COLUMNS = _v.EXPECTED_COLUMNS
 
 
-PATH_RE = re.compile(r"^submissions/(?P<team>[a-z0-9_]+)/(?P<date>\d{4}-\d{2}-\d{2})\.csv$")
-EXPECTED_COLUMNS = ["timestamp_utc", "forecast_mw"]
-
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def die(code: int, message: str) -> "None":
     print(f"ERROR: {message}", file=sys.stderr)
     sys.exit(code)
 
 
-def load_teams(teams_yml: Path) -> dict[str, dict]:
-    data = yaml.safe_load(teams_yml.read_text())
-    return {t["id"]: t for t in data.get("teams") or []}
-
+# ---------------------------------------------------------------------------
+# Shims — same signatures as before; convert SubmissionInvalid → sys.exit.
+# ---------------------------------------------------------------------------
 
 def parse_path(repo_relative: str) -> tuple[str, str]:
-    m = PATH_RE.match(repo_relative)
-    if not m:
-        die(1, f"Pfad '{repo_relative}' entspricht nicht "
-               "submissions/<team_id>/<YYYY-MM-DD>.csv")
-    return m.group("team"), m.group("date")
+    try:
+        return _v.parse_path(repo_relative)
+    except _v.SubmissionInvalid as e:
+        die(e.code, str(e))
 
 
 def validate_schema(csv_path: Path, target_date: str) -> None:
     try:
-        df = pd.read_csv(csv_path)
-    except Exception as exc:
-        die(1, f"CSV nicht lesbar: {exc}")
-
-    if list(df.columns) != EXPECTED_COLUMNS:
-        die(1, f"Spalten {list(df.columns)} != erwartete {EXPECTED_COLUMNS}")
-    if len(df) != 24:
-        die(1, f"24 Zeilen erwartet, aber {len(df)} gefunden")
-    if df["forecast_mw"].isna().any():
-        die(1, "forecast_mw enthält NaN-Werte (CR-3-Verstoß)")
-    if (df["forecast_mw"] <= 0).any():
-        die(1, "forecast_mw enthält nicht-positive Werte")
-
-    expected_stamps = pd.date_range(
-        f"{target_date}T00:00:00Z", periods=24, freq="h", tz="UTC"
-    ).strftime("%Y-%m-%dT%H:%M:%SZ").tolist()
-    actual_stamps = df["timestamp_utc"].astype(str).tolist()
-    if actual_stamps != expected_stamps:
-        for i, (a, e) in enumerate(zip(actual_stamps, expected_stamps)):
-            if a != e:
-                die(1, f"timestamp_utc[{i}] = '{a}' != '{e}'")
-        die(1, "timestamp_utc-Reihe weicht ab (Länge/Reihenfolge)")
+        _v.validate_schema(csv_path, target_date)
+    except _v.SubmissionInvalid as e:
+        die(e.code, str(e))
 
 
-def validate_deadline(target_date: str, now_utc: datetime | None = None) -> None:
-    now = now_utc or datetime.now(tz=timezone.utc)
-    # Deadline = D-1 23:59 UTC = Zieltag 00:00 UTC minus 1 Minute.
-    # Alles in UTC — keine lokale Zeitzone (CR: UTC-only).
-    target_midnight = datetime.fromisoformat(f"{target_date}T00:00:00") \
-        .replace(tzinfo=timezone.utc)
-    deadline = target_midnight - timedelta(minutes=1)
-    if now >= deadline:
-        die(2, f"Deadline {deadline.isoformat()} (UTC) überschritten "
-               f"(jetzt {now.isoformat()})")
+def validate_deadline(target_date: str, now_utc=None) -> None:
+    try:
+        _v.validate_deadline(target_date, now_utc)
+    except _v.SubmissionInvalid as e:
+        die(e.code, str(e))
 
 
 def validate_authorship(team_id: str, pr_author: str,
                          teams: dict[str, dict]) -> None:
-    team = teams.get(team_id)
-    if team is None:
-        die(3, f"Team '{team_id}' nicht in teams.yml registriert")
-    if team.get("pseudo", False):
-        die(3, f"Team '{team_id}' ist ein Pseudo-Team (Scores werden direkt "
-               f"aus den ENTSO-E-Daten abgeleitet); CSV-Submissions sind "
-               f"nicht erlaubt")
-    if team.get("retired", False):
-        die(3, f"Team '{team_id}' nimmt nicht mehr am Live-Wettbewerb teil "
-               f"(retired in teams.yml); neue Submissions sind nicht erlaubt")
-    handles = [h.lower() for h in team.get("github_handles", [])]
-    if pr_author.lower() not in handles:
-        die(3, f"PR-Autor '{pr_author}' nicht in github_handles für "
-               f"Team '{team_id}': {handles}")
+    try:
+        _v.validate_authorship(team_id, pr_author, teams)
+    except _v.SubmissionInvalid as e:
+        die(e.code, str(e))
 
+
+# ---------------------------------------------------------------------------
+# CLI entry-point
+# ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser()

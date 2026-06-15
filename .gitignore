@@ -11,3 +11,8 @@ public/index.html
 public/data/scores.json
 submissions/<team_id>/2026-05-30.csv
 public/data/daily.json
+
+# Python build artifacts (setuptools)
+*.egg-info/
+build/
+dist/
