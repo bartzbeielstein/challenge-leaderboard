@@ -293,6 +293,12 @@ def test_main_renders_forecast_chart_when_actuals_present(tmp_path):
     # hidden by its JS when only one day is available).
     assert 'id="cal-forecast"' in html
     assert 'id="cal-forecast-grid"' in html
+    # Sicht-Umschalter: „Nur Ist-Last" blendet alle Prognosen aus (zeigt nur
+    # die gemessene Last); „Alle Prognosen" stellt sie wieder her.
+    assert 'id="forecast-toolbar"' in html
+    assert 'id="forecast-only-actual"' in html
+    assert 'id="forecast-show-all"' in html
+    assert "Nur Ist-Last" in html
     # Layout: the Leaderboard table is above the forecast chart.
     assert html.index("<h2>Leaderboard</h2>") < html.index("Prognose vs. Ist-Last")
 
