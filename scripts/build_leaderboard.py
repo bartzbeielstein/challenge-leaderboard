@@ -23,6 +23,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from plotly.offline import get_plotlyjs
 
 import charts
+from score_day import RESTART_DATE  # Single Source of Truth des Phasen-Schnitts
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -32,14 +33,15 @@ PUBLIC_DIR = REPO_ROOT / "public"
 ENTSOE_BASELINE_ID = "entsoe"
 TEMPLATE_DIR = REPO_ROOT / "templates"
 WEEKDAYS_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-# „Clean restart" des Wettbewerbs: nur Zieltage AB diesem Datum (UTC) zählen
-# für das obere „Leaderboard" und die „Mittlere … je Team"-Balken — alle
-# Mittelwerte starten dort bei null. Zieltage DAVOR bleiben als eingefrorene
-# „Leaderboard Test Phase" am Seitenende erhalten. Die fortlaufenden Figuren
-# („Prognose vs. Ist-Last", „MAE-Verlauf", „Tagesfehler je Team") laufen über
-# die volle Historie weiter. target_date ist ISO 'YYYY-MM-DD' → der
-# lexikografische Vergleich entspricht dem Datumsvergleich.
-RESTART_DATE = "2026-06-10"
+# „Clean restart" des Wettbewerbs (``RESTART_DATE``, definiert in
+# ``score_day.py``): nur Zieltage AB diesem Datum (UTC) zählen für das obere
+# „Leaderboard" und die „Mittlere … je Team"-Balken — alle Mittelwerte starten
+# dort bei null. Zieltage DAVOR bleiben als eingefrorene „Leaderboard Test
+# Phase" am Seitenende erhalten. Die fortlaufenden Figuren („Prognose vs.
+# Ist-Last", „MAE-Verlauf", „Tagesfehler je Team") laufen über die volle
+# Historie weiter. ``score_day.collect_forecasts`` schreibt zudem keine
+# LOCF-Zeile mehr über diesen Schnitt hinweg — jedes Team startet in der
+# Realphase frisch.
 
 
 def load_teams() -> dict[str, str]:
@@ -172,16 +174,16 @@ def aggregate(scores: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
 def filter_live_teams(scores_live: pd.DataFrame) -> pd.DataFrame:
     """Live-Wertung auf Teams mit frischer Einreichung beschränken.
 
-    LOCF (``score_day.py``) schreibt für ausbleibende Einreichungen
-    Carry-Forward-Zeilen (``carried_forward == True``) — auch über den
-    Phasen-Schnitt (``RESTART_DATE``) hinweg. Ohne diesen Filter bliebe
-    ein Team, das nur in der Testphase eingereicht hat, per LOCF im
-    Live-Leaderboard und in den „Mittlere … je Team"-Balken gelistet.
-    Regel: Ein Team zählt zur Live-Phase, wenn es dort mindestens eine
-    frische Zeile (``carried_forward == False``) hat; seine LOCF-Zeilen
-    bleiben dann erhalten (Strafmechanik für verpasste Tage). Fehlt die
-    Spalte oder der Wert (ältere Parquet-Stände), gilt die Zeile als
-    frisch; Pseudo-Teams liefern ``carried_forward == False`` (s.
+    Seit dem Phasen-Schnitt-Fix schreibt ``score_day.collect_forecasts``
+    keine LOCF-Zeile mehr über ``RESTART_DATE`` hinweg — ein Team, das nur
+    in der Testphase eingereicht hat, bekommt in der Realphase gar keine
+    Zeilen. Dieser Filter bleibt als defensiver Backstop für ältere
+    Parquet-Stände (vor dem Fix erzeugte Test→Real-LOCF-Zeilen): Ein Team
+    zählt zur Live-Phase, wenn es dort mindestens eine frische Zeile
+    (``carried_forward == False``) hat; seine LOCF-Zeilen (innerhalb der
+    Realphase, Strafmechanik für verpasste Tage) bleiben erhalten. Fehlt die
+    Spalte oder der Wert (ältere Parquet-Stände), gilt die Zeile als frisch;
+    Pseudo-Teams liefern ``carried_forward == False`` (s.
     ``entsoe_pseudo_scores``) und bleiben gerankt.
     """
     if scores_live.empty or "carried_forward" not in scores_live.columns:

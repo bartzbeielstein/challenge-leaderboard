@@ -38,6 +38,12 @@ SCORES_PATH = REPO_ROOT / "data" / "scores.parquet"
 TEAMS_PATH = REPO_ROOT / "teams.yml"
 COUNTRY = "DE"
 DATE_CSV_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.csv$")
+# „Clean restart" des Wettbewerbs: erster zu prognostizierender Tag der
+# Realphase (UTC). Maßgeblich für die LOCF-Grenze in `collect_forecasts`
+# und — importiert — für die Phasen-Trennung in `build_leaderboard.py`
+# (Single Source of Truth). target_date ist ISO 'YYYY-MM-DD', der
+# lexikografische Vergleich entspricht dem Datumsvergleich.
+RESTART_DATE = "2026-06-10"
 
 
 def scoring_window(target_date: str) -> tuple[datetime, datetime, pd.DatetimeIndex]:
@@ -242,6 +248,15 @@ def collect_forecasts(
     Frische Submission für den Zieltag bevorzugt; sonst LOCF auf die
     letzte Submission vor target_date. Teams ohne irgendeine
     Submission werden übersprungen.
+
+    LOCF überschreitet **nie** den Phasen-Schnitt (``RESTART_DATE``): für
+    einen Realphasen-Zieltag (>= RESTART_DATE) kommen ausschließlich
+    Realphasen-Submissions (>= RESTART_DATE) als Carry-Forward-Quelle in
+    Frage. Jedes Team startet in der Realphase bei null — eine
+    Testphasen-Submission wird nie in die Realphase fortgeschrieben.
+    Andernfalls erhielte ein Team, das zu Beginn der Realphase nichts
+    einreicht (z. B. „Team 4 Optuna" am 10./11.06.), fälschlich
+    LOCF-Tagesfehler aus seiner letzten Testphasen-Prognose.
     """
     out: list[tuple[str, Path, bool]] = []
     for team_id in team_ids:
@@ -252,9 +267,12 @@ def collect_forecasts(
         if exact.exists():
             out.append((team_id, exact, False))
             continue
+        # Untergrenze für LOCF: in der Realphase nur Realphasen-Submissions;
+        # in der Testphase keine Schranke ("" ist lexikografisch minimal).
+        phase_floor = RESTART_DATE if target_date >= RESTART_DATE else ""
         prior = sorted(
             p for p in team_dir.glob("*.csv")
-            if DATE_CSV_RE.match(p.name) and p.stem < target_date
+            if DATE_CSV_RE.match(p.name) and phase_floor <= p.stem < target_date
         )
         if not prior:
             continue

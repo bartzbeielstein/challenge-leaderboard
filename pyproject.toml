@@ -1,10 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "challenge-leaderboard"
 version = "0.1.0"
 description = "Scoring + Leaderboard für die SoSe26-Lastprognose-Challenge."
 requires-python = ">=3.13"
 dependencies = [
-    "spotforecast2-safe>=3.0.0,<4",
+    # Used at runtime by scripts/score_day.py (download_new_data / fetch_data /
+    # get_data_home for ground-truth actuals). Bumped from the old >=3.0.0,<4
+    # pin to the book stack's major (no upper cap, per the no-upper-cap policy)
+    # so challenge_leaderboard can be imported alongside the lecture repos'
+    # spotforecast2-safe 22.x instead of clashing on the 3.x cap.
+    "spotforecast2-safe>=22.8.0",
     "pandas>=2.2",
     "pyarrow>=15",
     "pyyaml>=6",
@@ -12,6 +21,9 @@ dependencies = [
     "entsoe-py>=0.6",
     "plotly>=5.22",
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [dependency-groups]
 dev = [

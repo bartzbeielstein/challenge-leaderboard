@@ -132,6 +132,45 @@ def test_collect_forecasts_locf_carries_forward(write_submission, teams_yml_file
     assert "ghost" not in by_team   # no submissions at all -> skipped
 
 
+def test_collect_forecasts_no_locf_across_phase_boundary(
+    write_submission, teams_yml_file
+):
+    # „Clean restart": ein Team, das nur in der Testphase eingereicht hat
+    # (< RESTART_DATE), darf in der Realphase NICHT per LOCF aus der Testphase
+    # fortgeschrieben werden. Es startet frisch -> kein Eintrag (vgl. „Team 4
+    # Optuna" am 10./11.06.: keine Tagesfehler aus der letzten Test-Prognose).
+    assert sd.RESTART_DATE == "2026-06-10"
+    write_submission("team_4", "2026-06-07")   # nur Testphase
+    write_submission("team_4", "2026-06-09")   # nur Testphase
+    assert sd.collect_forecasts("2026-06-10", ["team_4"]) == []
+    assert sd.collect_forecasts("2026-06-11", ["team_4"]) == []
+
+
+def test_collect_forecasts_locf_within_real_phase_is_kept(
+    write_submission, teams_yml_file
+):
+    # Innerhalb der Realphase bleibt LOCF die Strafmechanik für verpasste Tage:
+    # eine frische Realphasen-Submission wird auf den nächsten Tag ohne
+    # Einreichung fortgeschrieben (Quelle >= RESTART_DATE).
+    write_submission("team_4", "2026-06-07")   # Testphase -> nie als Quelle
+    write_submission("team_4", "2026-06-10")   # frisch in der Realphase
+    forecasts = sd.collect_forecasts("2026-06-11", ["team_4"])
+    by_team = {t: (p.name, c) for t, p, c in forecasts}
+    assert by_team["team_4"] == ("2026-06-10.csv", True)   # LOCF aus Realphase
+
+
+def test_collect_forecasts_locf_within_test_phase_unchanged(
+    write_submission, teams_yml_file
+):
+    # In der Testphase (Zieltag < RESTART_DATE) bleibt das alte Verhalten:
+    # LOCF auf die letzte vorherige Testphasen-Submission.
+    write_submission("team_4", "2026-06-05")
+    write_submission("team_4", "2026-06-07")
+    forecasts = sd.collect_forecasts("2026-06-08", ["team_4"])
+    by_team = {t: (p.name, c) for t, p, c in forecasts}
+    assert by_team["team_4"] == ("2026-06-07.csv", True)
+
+
 def test_collect_forecasts_ignores_future_dates(write_submission, teams_yml_file):
     # Only future submission exists -> team should be skipped (the bug
     # before LOCF was that all teams without an exact match were skipped;
