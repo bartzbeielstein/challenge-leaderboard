@@ -74,5 +74,19 @@ jobs:
             EXTRA+=(--delete-branch)
           fi
 
-          echo "Aktiviere Auto-merge (squash) für PR #$PR (${FILES[0]}, head: $HEAD_REPO)."
-          gh pr merge "$PR" --repo "$REPO" --squash --auto "${EXTRA[@]}"
+          # Bevorzugt Auto-merge: wartet, falls noch ein Pflicht-Check läuft.
+          # Diese Workflow startet aber erst NACH erfolgreicher Validierung,
+          # daher ist der PR meist bereits „clean" (alle Pflicht-Checks grün).
+          # GitHub lehnt enablePullRequestAutoMerge dann mit „is in clean
+          # status" ab — in dem Fall direkt (sofort) squash-mergen.
+          echo "Mergen (squash) von PR #$PR (${FILES[0]}, head: $HEAD_REPO)."
+          err=$(mktemp)
+          if gh pr merge "$PR" --repo "$REPO" --squash --auto "${EXTRA[@]}" 2>"$err"; then
+            cat "$err"
+          elif grep -q "in clean status" "$err"; then
+            echo "PR #$PR ist bereits mergebar — direkter Squash-Merge."
+            gh pr merge "$PR" --repo "$REPO" --squash "${EXTRA[@]}"
+          else
+            cat "$err" >&2
+            exit 1
+          fi
