@@ -105,12 +105,14 @@ teams:
     group: "--"
     certified: "No"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
+    retired: true   # ab 2026-06-19 aus Live-Wertung genommen
   - id: team_4_entsoe_4zones
     display_name: "Team 4 Zones SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    retired: true   # ab 2026-06-19 aus Live-Wertung genommen
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
     github_handles: [bartzbeielstein]

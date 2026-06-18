@@ -711,6 +711,86 @@ def test_main_live_board_excludes_retired_team(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# Trend column: per-team position change vs. the previous scored day —
+# green up / red down / yellow dot (unchanged or newly ranked). Live board
+# only; the frozen test-phase board has no Trend column.
+# --------------------------------------------------------------------------
+
+def test_compute_trend_up_down_same_new():
+    scores_live = pd.DataFrame([
+        # Vortag (06-10): A=1 (100), D=2 (200), B=3 (300).
+        {"team_id": "A", "target_date": "2026-06-10", "mae": 100.0},
+        {"team_id": "D", "target_date": "2026-06-10", "mae": 200.0},
+        {"team_id": "B", "target_date": "2026-06-10", "mae": 300.0},
+        # Jüngster Tag (06-11): C kommt neu hinzu (schlechtester, ändert die
+        # Ränge der anderen nicht). Mittel: B=200 (1), D=225 (2), A=300 (3).
+        {"team_id": "A", "target_date": "2026-06-11", "mae": 500.0},
+        {"team_id": "D", "target_date": "2026-06-11", "mae": 250.0},
+        {"team_id": "B", "target_date": "2026-06-11", "mae": 100.0},
+        {"team_id": "C", "target_date": "2026-06-11", "mae": 9999.0},
+    ])
+    for col in ("rmse", "mape", "bias", "upr"):
+        scores_live[col] = 0.0
+    scores_live["carried_forward"] = False
+    assert bl.compute_trend(scores_live, {}) == {
+        "B": "up",      # 3 -> 1
+        "D": "same",    # 2 -> 2
+        "A": "down",    # 1 -> 3
+        "C": "new",     # am Vortag nicht gerankt
+    }
+
+
+def test_compute_trend_first_live_day_all_new():
+    scores_live = pd.DataFrame([
+        {"team_id": "A", "target_date": "2026-06-10", "mae": 100.0,
+         "rmse": 0.0, "mape": 0.0, "bias": 0.0, "upr": 0.0,
+         "carried_forward": False},
+        {"team_id": "B", "target_date": "2026-06-10", "mae": 200.0,
+         "rmse": 0.0, "mape": 0.0, "bias": 0.0, "upr": 0.0,
+         "carried_forward": False},
+    ])
+    assert bl.compute_trend(scores_live, {}) == {"A": "new", "B": "new"}
+
+
+def test_compute_trend_empty_returns_empty():
+    assert bl.compute_trend(pd.DataFrame(), {}) == {}
+
+
+def test_main_live_board_has_trend_column_test_board_does_not(tmp_path):
+    _seed_teams(tmp_path)
+    _seed(tmp_path, [
+        # Testphase (< RESTART_DATE): füllt das eingefrorene Test-Board.
+        {"team_id": "team_4", "target_date": "2026-06-07", "mae": 150.0,
+         "rmse": 150.0, "mape": 0.15, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-07", "mae": 250.0,
+         "rmse": 250.0, "mape": 0.25, "carried_forward": False},
+        # Live-Vortag (06-10): team_4 (100) vor hot_rod (200).
+        {"team_id": "team_4", "target_date": "2026-06-10", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-10", "mae": 200.0,
+         "rmse": 200.0, "mape": 0.2, "carried_forward": False},
+        # Jüngster Live-Tag (06-11): hot_rod überholt team_4.
+        {"team_id": "team_4", "target_date": "2026-06-11", "mae": 400.0,
+         "rmse": 400.0, "mape": 0.4, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-11", "mae": 100.0,
+         "rmse": 100.0, "mape": 0.1, "carried_forward": False},
+    ])
+    bl.main()
+    # scores.json (Live-Board): jede Zeile trägt jetzt ein trend-Feld.
+    data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
+    assert {r["team_id"]: r["trend"] for r in data} == {
+        "hot_rod": "up", "team_4": "down",
+    }
+    # HTML: Trend-Spalte nur im Live-Board, nicht im eingefrorenen Test-Board.
+    html = (tmp_path / "public" / "index.html").read_text()
+    split = html.index("<h2>Leaderboard Test Phase</h2>")
+    live_board, test_board = html[:split], html[split:]
+    assert ">Trend</th>" in live_board
+    assert ">Trend</th>" not in test_board
+    assert "▲" in live_board and "▼" in live_board
+
+
+# --------------------------------------------------------------------------
 # ENTSO-E day-ahead forecast as the ranked pseudo-team `entsoe`.
 # --------------------------------------------------------------------------
 

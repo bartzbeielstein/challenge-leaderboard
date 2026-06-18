@@ -80,6 +80,14 @@
     td.software.na { color: #d0d4da; }
     /* Tagesbester je Spalte in „Tagesfehler je Team". */
     td.best { font-weight: 700; }
+    /* Trend-Spalte (Positionsänderung ggü. Vortag): grüner Pfeil hoch =
+       verbessert, roter Pfeil runter = verschlechtert, gelber Punkt =
+       unverändert oder neu. */
+    th.trend, td.trend { text-align: center; }
+    td.trend { font-weight: 700; }
+    td.trend.up { color: #16a34a; }
+    td.trend.down { color: #dc2626; }
+    td.trend.same { color: var(--gold); }
     .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
     /* Kalender-Datumswahl fürs Forecast-Chart — permanent geöffnet. Der Plot
        nimmt die volle Breite ein; der Kalender sitzt darunter rechtsbündig,
@@ -168,11 +176,11 @@
   {# Gemeinsames Ranking-Tabellen-Markup für beide Leaderboards (Live-Wertung
      oben, „Leaderboard Test Phase" am Seitenende) — eine Quelle, damit
      Spalten und Spaltenbeste nie auseinanderlaufen. #}
-  {% macro ranking_table(rows) %}
+  {% macro ranking_table(rows, show_trend=False) %}
     <table class="ranking">
       <thead>
         <tr>
-          <th>#</th><th>Team</th>
+          <th>#</th>{% if show_trend %}<th class="trend" title="Positionsänderung ggü. Vortag">Trend</th>{% endif %}<th>Team</th>
           <th title="Gruppe laut group-Schlüssel in teams.yml">Group</th>
           <th class="status" title="Alle Artefakte vorhanden? Grün nur, wenn Model Card, Software und Certified vorliegen — Quelle: teams.yml (s. „About the Models")">Status</th>
           <th class="num">Mean MAE [MW]</th>
@@ -187,6 +195,15 @@
       {% for row in rows %}
         <tr>
           <td><span class="rank-badge">{{ row.rank }}</span></td>
+          {% if show_trend %}
+          {% if row.trend == 'up' %}
+          <td class="trend up" title="Position verbessert ggü. Vortag">▲</td>
+          {% elif row.trend == 'down' %}
+          <td class="trend down" title="Position verschlechtert ggü. Vortag">▼</td>
+          {% else %}
+          <td class="trend same" title="Position unverändert / neu">●</td>
+          {% endif %}
+          {% endif %}
           <td>{{ row.display_name }}</td>
           <td>{{ row.group if row.group else "—" }}</td>
           {% if row.artifact_status %}
@@ -221,7 +238,7 @@
       unter „Leaderboard Test Phase".
     </p>
     {% if rows %}
-    {{ ranking_table(rows) }}
+    {{ ranking_table(rows, show_trend=True) }}
     <p class="meta">
       Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Status</b>:
       ✅ = Model Card, Software und Certified vorhanden, ⚠️ = mindestens
