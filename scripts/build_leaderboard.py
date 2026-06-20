@@ -193,6 +193,45 @@ def filter_live_teams(scores_live: pd.DataFrame) -> pd.DataFrame:
     return scores_live[scores_live["team_id"].isin(live_ids)].copy()
 
 
+def compute_trend(scores_live: pd.DataFrame, names: dict[str, str]) -> dict[str, str]:
+    """Positionsänderung je Team ggü. dem letzten Zieltag (Trend-Spalte).
+
+    Vergleicht den aktuellen Live-Rang (volle Live-Historie) mit dem Rang vor
+    dem jüngsten Zieltag. Liefert je ``team_id`` einen der Werte:
+    ``"up"`` (Rang verbessert, also kleinere Zahl), ``"down"`` (verschlechtert),
+    ``"same"`` (unverändert) oder ``"new"`` (am Vortag noch nicht gerankt — am
+    ersten Live-Tag gilt das für alle). Die Vortags-Rangliste durchläuft
+    dieselbe Qualifikation (``filter_live_teams``) und Rang-Logik
+    (``aggregate``) wie das Live-Board; ``scores_live`` ist beim Aufruf bereits
+    phasen-, frisch- und retired-gefiltert. Zustandslos aus ``scores.parquet``
+    abgeleitet — eine ENTSO-E-Nachbenotung (s. ``revise_scores``) kann die
+    Vortags-Basis rückwirkend verschieben.
+    """
+    if scores_live.empty:
+        return {}
+    today = {r.team_id: r.rank
+             for r in aggregate(scores_live, names).itertuples()}
+    dates = sorted(scores_live["target_date"].astype(str).unique())
+    if len(dates) < 2:
+        return {tid: "new" for tid in today}          # erster Live-Tag
+    prior = scores_live[scores_live["target_date"].astype(str) < dates[-1]]
+    prior = filter_live_teams(prior)                  # gleiche Qualifikation
+    yest = {r.team_id: r.rank
+            for r in aggregate(prior, names).itertuples()}
+    out: dict[str, str] = {}
+    for tid, rank_now in today.items():
+        rank_prev = yest.get(tid)
+        if rank_prev is None:
+            out[tid] = "new"
+        elif rank_now < rank_prev:
+            out[tid] = "up"
+        elif rank_now > rank_prev:
+            out[tid] = "down"
+        else:
+            out[tid] = "same"
+    return out
+
+
 def daily_breakdown(
     scores: pd.DataFrame, names: dict[str, str], rank_order: list[str]
 ) -> dict:
@@ -408,6 +447,7 @@ def render(
     model_cards: list[dict[str, str]] | None = None,
     artifact_status: dict[str, bool | None] | None = None,
     groups: dict[str, str] | None = None,
+    trend: dict[str, str] | None = None,
 ) -> None:
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (PUBLIC_DIR / "data").mkdir(parents=True, exist_ok=True)
@@ -432,6 +472,12 @@ def render(
     for r in (*rows, *rows_test):
         r["artifact_status"] = status.get(r["team_id"])
         r["group"] = grp.get(r["team_id"])
+    # Trend-Spalte nur im Live-Board (rows) — die eingefrorene Testphase
+    # (rows_test) hat keinen Vortags-Vergleich. Default "new", falls ein Team
+    # nicht in der Trend-Map steht (z. B. leeres Live-Board).
+    tr = trend or {}
+    for r in rows:
+        r["trend"] = tr.get(r["team_id"], "new")
     html = template.render(
         rows=rows,
         rows_test=rows_test,
@@ -501,6 +547,7 @@ def main() -> None:
         scores_live = scores_test = scores
     board = aggregate(scores_live, names)         # oberes „Leaderboard" (live)
     board_test = aggregate(scores_test, names)    # „Leaderboard Test Phase"
+    trend = compute_trend(scores_live, names)     # Positionsänderung ggü. Vortag
     # Zeilen-Reihenfolge der fortgeführten Tages-Tabellen: Voll-Historie-Rang,
     # damit jedes je bewertete Team gelistet bleibt (das Live-Board ist zum
     # Start leer und taugt nicht als Reihenfolge).
@@ -509,7 +556,7 @@ def main() -> None:
     figs = build_figures(board, daily, scores, names, actuals)
     logo_uri = load_logo_uri(REPO_ROOT / "logo" / "spotlogo.png")
     render(board, board_test, daily, figs, logo_uri, load_model_cards(),
-           load_artifact_status(), load_groups())
+           load_artifact_status(), load_groups(), trend)
     print(f"[build] Live-Leaderboard {len(board)} Teams, Testphase "
           f"{len(board_test)} Teams ({len(daily['dates'])} bewertete Tage) "
           f"-> public/index.html")
