@@ -2,98 +2,659 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lastprognose-Challenge SoSe26 — Leaderboard</title>
+  {% if plotlyjs %}<script>{{ plotlyjs | safe }}</script>{% endif %}
   <style>
-    body { font-family: "Helvetica Neue", Arial, sans-serif; max-width: 880px;
-           margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-    h1 { margin-bottom: 0.2rem; }
-    .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --ink: #1a1f29;
+      --muted: #6b7280;
+      --line: #e7eaef;
+      --accent: #4f46e5;
+      --accent-soft: #eef2ff;
+      --gold: #f6c453;
+      --shadow: 0 1px 3px rgba(16, 24, 40, .06), 0 1px 2px rgba(16, 24, 40, .04);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+                   sans-serif;
+      max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+      color: var(--ink); background: var(--bg); line-height: 1.5;
+    }
+    a { color: var(--accent); }
+    .hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #fff; border-radius: 16px; padding: 1.75rem 2rem;
+      box-shadow: var(--shadow); margin-bottom: 1.5rem;
+    }
+    .hero-top { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+                margin-bottom: .35rem; }
+    .hero-logo { height: 52px; width: auto; background: #fff; border-radius: 10px;
+                 padding: 7px 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
+    .hero h1 { margin: 0; font-size: 1.8rem; letter-spacing: -.01em; }
+    .hero p { margin: 0; color: rgba(255, 255, 255, .88); max-width: 70ch; }
+    .hero .hero-note {
+      margin-top: .8rem; padding: .55rem .9rem; max-width: 78ch;
+      font-size: .9rem; color: rgba(255, 255, 255, .92);
+      background: rgba(255, 255, 255, .12); border-radius: 10px;
+      border-left: 3px solid rgba(255, 255, 255, .55);
+    }
+    .hero .stats { margin-top: 1.1rem; display: flex; gap: 2rem; flex-wrap: wrap; }
+    .hero .stat b { display: block; font-size: 1.5rem; line-height: 1.1; }
+    .hero .stat span { font-size: .8rem; color: rgba(255, 255, 255, .8);
+                       text-transform: uppercase; letter-spacing: .04em; }
+    .meta { color: var(--muted); font-size: .9rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+    }
+    .card > h2 { margin: 0 0 .9rem; font-size: 1.2rem; }
+    .card > .meta { margin: -.4rem 0 1rem; }
+    .js-plotly-plot { width: 100% !important; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { padding: 0.5rem 0.8rem; text-align: left;
-             border-bottom: 1px solid #e5e5e5; }
-    th { background: #f5f5f5; }
-    td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    tr:first-child td { font-weight: 600; }
-    .empty { color: #888; font-style: italic; padding: 2rem 0; }
-    h2 { margin-top: 2.5rem; }
-    td.locf { color: #888; }
-    td.miss { color: #ccc; text-align: right; }
+    th, td { padding: .55rem .8rem; text-align: left;
+             border-bottom: 1px solid var(--line); }
+    th { background: #fafbfc; font-size: .82rem; text-transform: uppercase;
+         letter-spacing: .03em; color: var(--muted); }
+    /* Numerische Spalten rechtsbündig — Header (th.num) wie Werte (td.num),
+       damit Spaltenkopf und Zahlen bündig untereinander stehen. */
+    th.num, td.num { text-align: right; }
+    td.num { font-variant-numeric: tabular-nums; }
+    tbody tr:nth-child(even) td { background: #fcfcfd; }
+    /* Gesamtbester (Zeile 1) bekommt die Trophäe; fett sind stattdessen
+       die Spaltenbesten (td.best, je Metrik). */
+    table.ranking tbody tr:first-child td:first-child::before { content: "🏆 "; }
+    td.locf { color: #9aa1ab; }
+    td.miss { color: #d0d4da; text-align: right; }
+    /* Fehlende Model Card in „About the Models". */
+    td.card-missing { color: #b54708; font-style: italic; }
+    /* Status-Spalte im Leaderboard (alle Artefakte vorhanden?). */
+    th.status, td.status { text-align: center; }
+    td.status.na { color: #d0d4da; }
+    /* Software-Spalte in „About the Models": ZIP-Link und Strich rechtsbündig. */
+    th.software, td.software { text-align: right; }
+    td.software.na { color: #d0d4da; }
+    /* Tagesbester je Spalte in „Tagesfehler je Team". */
+    td.best { font-weight: 700; }
+    /* Trend-Spalte (Positionsänderung ggü. Vortag): grüner Pfeil hoch =
+       verbessert, roter Pfeil runter = verschlechtert, gelber Punkt =
+       unverändert oder neu. */
+    th.trend, td.trend { text-align: center; }
+    td.trend { font-weight: 700; }
+    td.trend.up { color: #16a34a; }
+    td.trend.down { color: #dc2626; }
+    td.trend.same { color: var(--gold); }
+    .empty { color: #888; font-style: italic; padding: 2rem 0; text-align: center; }
+    /* Kalender-Datumswahl fürs Forecast-Chart — permanent geöffnet. Der Plot
+       nimmt die volle Breite ein; der Kalender sitzt darunter rechtsbündig,
+       auf Höhe der (vollbreiten) Plot-Legende. Auf schmalen Screens zentriert. */
+    .fig-cal-row { display: block; }
+    .fig-cal-plot { width: 100%; min-width: 0; }
+    .cal-row { display: flex; justify-content: flex-end; }
+    .cal-wrap { flex: 0 0 auto; }
+    @media (max-width: 760px) { .cal-row { justify-content: center; } }
+    .cal {
+      padding: .8rem .9rem; width: max-content;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: var(--shadow);
+    }
+    .cal-sel {
+      margin: 0 0 .6rem; padding: .35rem .6rem; text-align: center;
+      font-weight: 600; font-size: .9rem; color: var(--accent);
+      background: var(--accent-soft); border-radius: 8px;
+    }
+    .cal-head { display: flex; align-items: center; justify-content: space-between;
+                gap: .5rem; margin-bottom: .55rem; }
+    .cal-title { font-weight: 600; font-size: .95rem; min-width: 9.5rem;
+                 text-align: center; }
+    .cal-nav {
+      width: 30px; height: 30px; font: inherit; line-height: 1;
+      color: var(--ink); background: none; border: 1px solid var(--line);
+      border-radius: 8px; cursor: pointer;
+    }
+    .cal-nav:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .cal-nav:disabled { opacity: .3; cursor: default; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 38px); gap: 3px; }
+    .cal-dow { text-align: center; font-size: .7rem; color: var(--muted);
+               text-transform: uppercase; letter-spacing: .03em; padding: .15rem 0; }
+    .cal-day {
+      height: 34px; font: inherit; font-size: .85rem; text-align: center;
+      color: #c6cbd3; background: none; border: none; border-radius: 9px;
+    }
+    .cal-day.avail { color: var(--ink); background: var(--accent-soft);
+                     font-weight: 600; cursor: pointer; }
+    .cal-day.avail:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .cal-day.sel { background: var(--accent); color: #fff; }
+    .rank-badge { display: inline-block; min-width: 1.5rem; text-align: center;
+                  font-weight: 600; }
+    /* Wochen-Umschalter der Tagesfehler-Tabellen; Datums-Header behalten
+       das deutsche Kurzformat („Di, 26.5.26") statt Großschreibung. */
+    .daily-card th[data-week] { text-transform: none; }
+    .week-nav { display: flex; align-items: center; gap: .6rem;
+                margin: 0 0 .8rem; }
+    .week-label {
+      padding: .35rem .8rem; font-weight: 600; font-size: .9rem;
+      color: var(--accent); background: var(--accent-soft);
+      border-radius: 999px;
+    }
+    footer { color: var(--muted); font-size: .88rem; margin-top: 2rem;
+             text-align: center; }
   </style>
 </head>
 <body>
-  <h1>Lastprognose-Challenge SoSe26</h1>
-  <p class="meta">
-    Bewertung der DE-day-ahead-Lastprognose (mittlere MAE über alle
-    bewerteten Tage, aufsteigend; fehlende Submissions werden per LOCF
-    aus der jeweils letzten Prognose fortgeschrieben).
-    Stand: {{ generated_at }} UTC.
-  </p>
+  <header class="hero">
+    <div class="hero-top">
+      {% if logo_uri %}<img class="hero-logo" src="{{ logo_uri }}" alt="SpotOptim">{% endif %}
+      <h1>Lastprognose-Challenge SoSe26</h1>
+    </div>
+    <p>
+      DE-Day-Ahead-Lastprognose im Wettbewerb: bewertet über die mittlere
+      MAE aller Zieltage (aufsteigend; fehlende Submissions werden per LOCF
+      aus der jeweils letzten Prognose fortgeschrieben).
+    </p>
+    <p class="hero-note">
+      📌 ENTSO-E korrigiert veröffentlichte Ist-Lastwerte gelegentlich
+      nachträglich. Betroffene Zieltage werden dann automatisch neu
+      bewertet — die Platzierungen im Leaderboard können sich dadurch
+      auch rückwirkend ändern.
+    </p>
+    {% if rows %}
+    <div class="stats">
+      <div class="stat"><b>{{ rows|length }}</b><span>Teams</span></div>
+      <div class="stat"><b>{{ daily.dates|length if daily and daily.dates else 0 }}</b><span>Bewertete Tage</span></div>
+      <div class="stat"><b>{{ "%.0f"|format(rows[0].mean_mae) }}</b><span>Beste Ø MAE [MW]</span></div>
+    </div>
+    {% endif %}
+  </header>
 
-  {% if rows %}
-  <table>
-    <thead>
-      <tr>
-        <th>#</th><th>Team</th>
-        <th class="num">Mean MAE [MW]</th>
-        <th class="num">Sum MAE [MW]</th>
-        <th class="num">Bewertete Tage</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for row in rows %}
-      <tr>
-        <td>{{ row.rank }}</td>
-        <td>{{ row.display_name }}</td>
-        <td class="num">{{ "%.2f"|format(row.mean_mae) }}</td>
-        <td class="num">{{ "%.2f"|format(row.sum_mae) }}</td>
-        <td class="num">{{ row.n_submissions }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="empty">Noch keine bewerteten Submissions.</p>
+  <p class="meta">Stand: {{ generated_at }} UTC.</p>
+
+  {# Gemeinsames Ranking-Tabellen-Markup für beide Leaderboards (Live-Wertung
+     oben, „Leaderboard Test Phase" am Seitenende) — eine Quelle, damit
+     Spalten und Spaltenbeste nie auseinanderlaufen. #}
+  {% macro ranking_table(rows, show_trend=False) %}
+    <table class="ranking">
+      <thead>
+        <tr>
+          <th>#</th>{% if show_trend %}<th class="trend" title="Positionsänderung ggü. Vortag">Trend</th>{% endif %}<th>Team</th>
+          <th title="Gruppe laut group-Schlüssel in teams.yml">Group</th>
+          <th class="status" title="Alle Artefakte vorhanden? Grün nur, wenn Model Card, Software und Certified vorliegen — Quelle: teams.yml (s. „About the Models")">Status</th>
+          <th class="num">Mean MAE [MW]</th>
+          <th class="num">Mean RMSE [MW]</th>
+          <th class="num">Mean MAPE [%]</th>
+          <th class="num" title="Ø(Prognose − Ist); negativ = systematische Unterprognose">Mean Bias [MW]</th>
+          <th class="num" title="Under-Prediction Rate: Anteil Stunden mit Prognose < Ist">UPR [%]</th>
+          <th class="num">Bewertete Tage</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><span class="rank-badge">{{ row.rank }}</span></td>
+          {% if show_trend %}
+          {% if row.trend == 'up' %}
+          <td class="trend up" title="Position verbessert ggü. Vortag">▲</td>
+          {% elif row.trend == 'down' %}
+          <td class="trend down" title="Position verschlechtert ggü. Vortag">▼</td>
+          {% else %}
+          <td class="trend same" title="Position unverändert / neu">●</td>
+          {% endif %}
+          {% endif %}
+          <td>{{ row.display_name }}</td>
+          <td>{{ row.group if row.group else "—" }}</td>
+          {% if row.artifact_status %}
+          <td class="status" title="Model Card, Software und Certified vorhanden">✅</td>
+          {% elif row.artifact_status is sameas false %}
+          <td class="status" title="Model Card, Software oder Certified fehlt (s. „About the Models")">⚠️</td>
+          {% else %}
+          <td class="status na" title="Pseudo-Team — kein eigenes Modell">—</td>
+          {% endif %}
+          <td class="num{{ ' best' if row.best_mae else '' }}">{{ "%.2f"|format(row.mean_mae) }}</td>
+          <td class="num{{ ' best' if row.best_rmse else '' }}">{{ "%.2f"|format(row.mean_rmse) }}</td>
+          <td class="num{{ ' best' if row.best_mape else '' }}">{{ "%.2f"|format(row.mean_mape) }}</td>
+          <td class="num{{ ' best' if row.best_bias else '' }}">{{ "%.2f"|format(row.mean_bias) }}</td>
+          <td class="num{{ ' best' if row.best_upr else '' }}">{{ "%.1f"|format(row.mean_upr) }}</td>
+          <td class="num{{ ' best' if row.best_days else '' }}">{{ row.n_submissions }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endmacro %}
+
+  <section class="card">
+    <h2>Leaderboard</h2>
+    <p class="meta">
+      Live-Wertung des Wettbewerbs ab Zieltag 10.06.2026 (UTC, „clean
+      restart"): alle Mittelwerte starten bei null und zählen ausschließlich
+      Submissions ab diesem Tag. Gelistet sind nur Teams, die ab diesem
+      Zieltag mindestens eine eigene Prognose eingereicht haben — allein
+      fortgeschriebene Prognosen (LOCF) qualifizieren nicht. Die Auswertung
+      eines Zieltags erscheint am Folgetag, sobald die ENTSO-E-Ist-Werte
+      veröffentlicht sind. Die abgeschlossene Aufwärmphase finden Sie unten
+      unter „Leaderboard Test Phase".
+    </p>
+    {% if rows %}
+    {{ ranking_table(rows, show_trend=True) }}
+    <p class="meta">
+      Ranking nach Mean MAE (Tie-Break: bewertete Tage). <b>Status</b>:
+      ✅ = Model Card, Software und Certified vorhanden, ⚠️ = mindestens
+      eines fehlt — gleiche Quelle wie die Sektion „About the Models"
+      (<code>teams.yml</code>). <b>Fett</b> markiert
+      den besten Wert jeder Spalte: Minimum bei MAE/RMSE/MAPE, am nächsten
+      an 0 beim Bias, am nächsten an 50&nbsp;% bei der UPR, Maximum bei den
+      bewerteten Tagen. <b>Bias</b> =
+      Ø(Prognose − Ist), negativ = systematische Unterprognose; <b>UPR</b> =
+      Anteil der Stunden mit Prognose &lt; Ist. Beides macht die im
+      Netzbetrieb teurere Unterprognose-Richtung sichtbar, die
+      vorzeichenblinde Metriken (MAE/RMSE/MAPE) verbergen — die offiziellen
+      ENTSO-E-Day-ahead-Lastprognosen sind nachweislich systematisch
+      verzerrt, vgl. <a href="https://arxiv.org/abs/2302.11017">Möbius
+      et&nbsp;al. (2023), „Enhancing Energy System Models Using Better Load
+      Forecasts", arXiv:2302.11017</a>.
+    </p>
+    {% else %}
+      <p class="empty">
+        Noch keine Live-Wertung — die erste Auswertung erscheint, sobald die
+        ENTSO-E-Ist-Werte für den 10.06.2026 veröffentlicht sind (am
+        11.06.2026, UTC). Bis dahin finden Sie die letzten Auswertungen unten
+        unter „Leaderboard Test Phase".
+      </p>
+    {% endif %}
+  </section>
+
+  {% if figs and figs.forecast %}
+  <section class="card">
+    <h2>Prognose vs. Ist-Last</h2>
+    <p class="meta">
+      Stündliche 24-h-Prognose jedes Teams gegen die tatsächlich gemessene
+      Netzlast (ENTSO-E Actual Total Load, DE). Die gestrichelte Linie ist die
+      ENTSO-E-Day-ahead-Prognose als Referenz-Baseline. Zieltag über den
+      Kalender wählbar.
+    </p>
+    <div class="fig-cal-row">
+      <div class="fig-cal-plot">{{ figs.forecast | safe }}</div>
+      <div class="cal-row">
+      <div class="cal-wrap" id="cal-forecast" hidden>
+        <div class="cal" id="cal-forecast-panel" role="group" aria-label="Zieltag wählen">
+          <p class="cal-sel">Zieltag: <span id="cal-forecast-sel"></span></p>
+          <div class="cal-head">
+            <button type="button" class="cal-nav" id="cal-forecast-prev"
+                    aria-label="Voriger Monat">‹</button>
+            <span class="cal-title" id="cal-forecast-title"></span>
+            <button type="button" class="cal-nav" id="cal-forecast-next"
+                    aria-label="Nächster Monat">›</button>
+          </div>
+          <div class="cal-grid" id="cal-forecast-grid"></div>
+        </div>
+      </div>
+      </div>
+    </div>
+    <script>
+    (function () {
+      "use strict";
+      var MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
+                    "August", "September", "Oktober", "November", "Dezember"];
+      var DOWS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      var tries = 0;
+
+      function init() {
+        var gd = document.getElementById("fig-forecast");
+        if (!gd || !gd.layout || !gd.layout.meta) {
+          if (tries++ < 100) { setTimeout(init, 50); }
+          return;
+        }
+        var meta = gd.layout.meta;
+        var days = meta.days || [];
+        if (days.length < 2) { return; }  // nichts zu wählen
+
+        var wrap = document.getElementById("cal-forecast");
+        var selLabel = document.getElementById("cal-forecast-sel");
+        var title = document.getElementById("cal-forecast-title");
+        var grid = document.getElementById("cal-forecast-grid");
+        var prev = document.getElementById("cal-forecast-prev");
+        var next = document.getElementById("cal-forecast-next");
+
+        var avail = {};
+        days.forEach(function (d) { avail[d] = true; });
+        var selected = days[days.length - 1];
+        var view = { y: +selected.slice(0, 4), m: +selected.slice(5, 7) - 1 };
+        var minKey = days[0].slice(0, 7), maxKey = days[days.length - 1].slice(0, 7);
+
+        function monthKey(y, m) {
+          return y + "-" + String(m + 1).padStart(2, "0");
+        }
+
+        function deDate(d) {  // ISO 'YYYY-MM-DD' -> 'DD.MM.YYYY'
+          return d.slice(8, 10) + "." + d.slice(5, 7) + "." + d.slice(0, 4);
+        }
+
+        function selectDay(d) {
+          selected = d;
+          var traces = meta.dayTraces[d] || [];
+          var vis = gd.data.map(function (_, i) {
+            return traces.indexOf(i) !== -1;
+          });
+          Plotly.update(gd, { visible: vis },
+                        { "title.text": meta.titlePrefix + " — " + deDate(d) });
+          selLabel.textContent = deDate(d);
+          renderGrid();
+        }
+
+        function renderGrid() {
+          title.textContent = MONTHS[view.m] + " " + view.y;
+          prev.disabled = monthKey(view.y, view.m) <= minKey;
+          next.disabled = monthKey(view.y, view.m) >= maxKey;
+          grid.textContent = "";
+          DOWS.forEach(function (n) {
+            var el = document.createElement("span");
+            el.className = "cal-dow";
+            el.textContent = n;
+            grid.appendChild(el);
+          });
+          var first = new Date(Date.UTC(view.y, view.m, 1));
+          var offset = (first.getUTCDay() + 6) % 7;  // Mo = 0
+          var nDays = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
+          for (var i = 0; i < offset; i++) {
+            grid.appendChild(document.createElement("span"));
+          }
+          for (var day = 1; day <= nDays; day++) {
+            var iso = monthKey(view.y, view.m) + "-" + String(day).padStart(2, "0");
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "cal-day";
+            btn.textContent = day;
+            if (avail[iso]) {
+              btn.classList.add("avail");
+              if (iso === selected) { btn.classList.add("sel"); }
+              btn.addEventListener("click", selectDay.bind(null, iso));
+            } else {
+              btn.disabled = true;
+            }
+            grid.appendChild(btn);
+          }
+        }
+
+        function shiftMonth(delta) {
+          var d = new Date(Date.UTC(view.y, view.m + delta, 1));
+          view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+          renderGrid();
+        }
+
+        prev.addEventListener("click", shiftMonth.bind(null, -1));
+        next.addEventListener("click", shiftMonth.bind(null, 1));
+
+        selLabel.textContent = deDate(selected);
+        renderGrid();
+        wrap.hidden = false;
+        // Der Plot wurde in voller Kartenbreite gerendert, bevor der
+        // Kalender eingeblendet wurde — auf die schmalere Flex-Spalte
+        // nachjustieren (responsive greift sonst erst beim Window-Resize).
+        Plotly.Plots.resize(gd);
+      }
+
+      init();
+    })();
+    </script>
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard %}
+  <section class="card">
+    <h2>Mittlere MAE je Team</h2>
+    <p class="meta">
+      Mittlerer absoluter Fehler [MW] über alle bewerteten Tage —
+      die <b>Ranking-Metrik</b> des Leaderboards. Jede Stunde zählt gleich;
+      kleiner = besser.
+    </p>
+    {{ figs.leaderboard | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_rmse %}
+  <section class="card">
+    <h2>Mittlerer RMSE je Team</h2>
+    <p class="meta">
+      Wurzel des mittleren quadratischen Fehlers [MW]. Quadrieren gewichtet
+      große Einzelfehler überproportional — wer Lastspitzen verpasst, fällt
+      hier stärker ab als bei der MAE; kleiner = besser.
+    </p>
+    {{ figs.leaderboard_rmse | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_mape %}
+  <section class="card">
+    <h2>Mittlere MAPE je Team</h2>
+    <p class="meta">
+      Mittlerer absoluter Fehler relativ zur Ist-Last [%] — die klassische
+      Referenzmetrik der Lastprognose-Praxis, vergleichbar über Tage mit
+      unterschiedlichem Lastniveau; kleiner = besser.
+    </p>
+    {{ figs.leaderboard_mape | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_bias %}
+  <section class="card">
+    <h2>Mittlerer Bias je Team</h2>
+    <p class="meta">
+      Ø(Prognose − Ist) [MW], <b>signiert</b>: negativ = systematische
+      Unterprognose (im Netzbetrieb die teurere Richtung), positiv =
+      Überprognose. Bester Wert = am nächsten an der 0-Linie (gepunktet) —
+      ein kleiner Bias bei großer MAE bedeutet: die Fehler heben sich auf,
+      sind aber stündlich trotzdem groß.
+    </p>
+    {{ figs.leaderboard_bias | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.leaderboard_upr %}
+  <section class="card">
+    <h2>Mittlere UPR je Team</h2>
+    <p class="meta">
+      Under-Prediction Rate [%]: Anteil der Stunden, in denen die Prognose
+      <b>unter</b> der Ist-Last lag. 50&nbsp;% (gepunktete Linie) ≈
+      ausgewogen; Werte nahe 100&nbsp;% bzw. 0&nbsp;% zeigen systematisch
+      einseitige Prognosen. Bester Wert = am nächsten an 50&nbsp;%.
+    </p>
+    {{ figs.leaderboard_upr | safe }}
+  </section>
+  {% endif %}
+
+  {% if figs and figs.mae_time %}
+  <section class="card">
+    <h2>MAE-Verlauf</h2>
+    <p class="meta">
+      Tages-MAE je Team über die Zeit. Offene Marker kennzeichnen via LOCF
+      fortgeschriebene Tage (keine frische Submission).
+    </p>
+    {{ figs.mae_time | safe }}
+  </section>
   {% endif %}
 
   {% if daily and daily.dates %}
-  <h2>Tagesfehler je Team</h2>
-  <p class="meta">
-    MAE [MW] pro Zieltag. Werte in <span class="locf">grau</span> kennzeichnen
-    eine via LOCF fortgeschriebene Prognose (keine frische Submission für
-    diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
-    Forecast vorlag.
-  </p>
-  <table>
-    <thead>
-      <tr>
-        <th>Team</th>
-        {% for d in daily.dates %}<th class="num">{{ d }}</th>{% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-    {% for team in daily.teams %}
-      <tr>
-        <td>{{ team.display_name }}</td>
-        {% for c in team.cells %}
-          {% if c.mae is none %}
-            <td class="miss">—</td>
-          {% elif c.carried %}
-            <td class="num locf" title="LOCF — fortgeschrieben">{{ "%.2f"|format(c.mae) }}</td>
-          {% else %}
-            <td class="num">{{ "%.2f"|format(c.mae) }}</td>
-          {% endif %}
-        {% endfor %}
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  {# Tagesfehler-Tabellen für alle Metriken — Reihenfolge wie die
+     Leaderboard-Spalten. "best" je Metrik: Spaltenminimum (MAE/RMSE/MAPE),
+     am nächsten an 0 (Bias) bzw. an 50 % (UPR). #}
+  {% set daily_tables = [
+    ("mae",  "MAE",  "%.2f",  "MAE [MW] pro Zieltag: mittlerer absoluter
+        Fehler. <b>Fett</b> markiert den besten Wert des Tages
+        (Spaltenminimum)."),
+    ("rmse", "RMSE", "%.2f",  "RMSE [MW] pro Zieltag: quadratisches
+        Fehlermaß, bestraft Ausreißer/verpasste Spitzen stärker.
+        <b>Fett</b> markiert den besten Wert des Tages (Spaltenminimum)."),
+    ("mape", "MAPE", "%.2f",  "MAPE [%] pro Zieltag: absoluter Fehler
+        relativ zur Ist-Last — die Referenzmetrik der Praxis.
+        <b>Fett</b> markiert den besten Wert des Tages (Spaltenminimum)."),
+    ("bias", "Bias", "%+.2f", "Bias [MW] pro Zieltag: Ø(Prognose − Ist),
+        signiert — negativ = Unterprognose, positiv = Überprognose.
+        <b>Fett</b> markiert den Tageswert, der am nächsten an 0 liegt."),
+    ("upr",  "UPR",  "%.1f",  "UPR [%] pro Zieltag: Anteil der Stunden mit
+        Prognose &lt; Ist. 50 % ≈ ausgewogen. <b>Fett</b> markiert den
+        Tageswert, der am nächsten an 50 % liegt."),
+  ] %}
+  {% for mkey, mlabel, mfmt, mdesc in daily_tables %}
+  <section class="card daily-card">
+    <h2>Tagesfehler je Team [{{ mlabel }}]</h2>
+    <p class="meta">
+      {{ mdesc | safe }} Werte in <span class="locf">grau</span> kennzeichnen
+      eine via LOCF fortgeschriebene Prognose (keine frische Submission für
+      diesen Tag); ein Strich bedeutet, dass für das Team kein scoreable
+      Forecast vorlag.
+    </p>
+    <div class="week-nav" hidden>
+      <button type="button" class="cal-nav week-prev"
+              aria-label="Vorige Woche">‹</button>
+      <span class="week-label"></span>
+      <button type="button" class="cal-nav week-next"
+              aria-label="Nächste Woche">›</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Team</th>
+          {% for m in daily.date_meta %}<th class="num" data-week="{{ m.week }}">{{ m.label }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for team in daily.teams %}
+        <tr>
+          <td>{{ team.display_name }}</td>
+          {% for c in team.cells %}
+            {% set wk = daily.date_meta[loop.index0].week %}
+            {% if c[mkey] is none %}
+              <td class="miss" data-week="{{ wk }}">—</td>
+            {% else %}
+              <td class="num{{ ' locf' if c.carried else '' }}{{ ' best' if c['best_' ~ mkey] else '' }}" data-week="{{ wk }}"{% if c.carried %} title="LOCF — fortgeschrieben"{% endif %}>{{ mfmt|format(c[mkey]) }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+  <script>
+  (function () {
+    "use strict";
+    // Wochen-Umschalter: blendet pro Tagesfehler-Tabelle nur die Spalten
+    // der gewählten ISO-Woche ein (Default: jüngste Woche). Ohne JS oder
+    // bei nur einer Woche bleiben alle Spalten sichtbar.
+    document.querySelectorAll(".daily-card").forEach(function (sec) {
+      var ths = sec.querySelectorAll("th[data-week]");
+      var weeks = [];
+      ths.forEach(function (th) {
+        if (weeks.indexOf(th.dataset.week) === -1) weeks.push(th.dataset.week);
+      });
+      if (weeks.length < 2) { return; }
+      var nav = sec.querySelector(".week-nav");
+      var prev = nav.querySelector(".week-prev");
+      var next = nav.querySelector(".week-next");
+      var label = nav.querySelector(".week-label");
+      var idx = weeks.length - 1;
+
+      function render() {
+        var wk = weeks[idx];
+        sec.querySelectorAll("[data-week]").forEach(function (el) {
+          el.style.display = el.dataset.week === wk ? "" : "none";
+        });
+        var vis = sec.querySelectorAll("th[data-week='" + wk + "']");
+        label.textContent = "KW " + parseInt(wk.split("-W")[1], 10) + " · "
+          + vis[0].textContent + " – " + vis[vis.length - 1].textContent;
+        prev.disabled = idx === 0;
+        next.disabled = idx === weeks.length - 1;
+      }
+
+      prev.addEventListener("click", function () {
+        if (idx > 0) { idx--; render(); }
+      });
+      next.addEventListener("click", function () {
+        if (idx < weeks.length - 1) { idx++; render(); }
+      });
+      nav.hidden = false;
+      render();
+    });
+  })();
+  </script>
   {% endif %}
 
-  <p class="meta">
+  <section class="card">
+    <h2>Leaderboard Test Phase</h2>
+    <p class="meta">
+      Eingefrorene Wertung der Aufwärm-/Testphase: alle Zieltage <b>vor</b>
+      dem 10.06.2026 (UTC). Diese Tabelle dokumentiert die Testphase und
+      ändert sich nicht mehr — die laufende Wertung steht oben unter
+      „Leaderboard". Spalten und Markierungen sind identisch zur Live-Wertung.
+    </p>
+    {% if rows_test %}
+    {{ ranking_table(rows_test) }}
+    {% else %}
+      <p class="empty">Keine bewerteten Submissions in der Testphase.</p>
+    {% endif %}
+  </section>
+
+  {% if model_cards %}
+  <section class="card">
+    <h2>About the Models</h2>
+    <p class="meta">
+      Model Cards dokumentieren Modellarchitektur, Trainingsdaten und
+      Limitationen der eingesetzten Prognosemodelle; Teams ohne
+      veröffentlichten Link sind mit ⚠️ markiert. <b>Software</b> verlinkt
+      das herunterladbare Reproduzierbarkeits-ZIP der Prognose-Software
+      (gepinnte Abhängigkeiten via <code>uv</code>, eingefrorene Daten,
+      Anleitung). Quelle: <code>model_card_link</code> bzw.
+      <code>software_link</code> in <code>teams.yml</code>.
+      <b>Reproduktion zertifizieren:</b> Prüfteams laden die
+      <a href="./Certificate.md">Reproduktions-Zertifikat-Vorlage</a> herunter,
+      füllen sie aus, kompilieren sie zu PDF und senden sie an den Veranstalter
+      Prof. Dr. Bartz-Beielstein; die Spalte
+      <b>Certified</b> zeigt anschließend ✅ (Schlüssel <code>certified</code>
+      in <code>teams.yml</code>).
+    </p>
+    <table>
+      <thead>
+        <tr><th>Team</th><th>Model Card</th><th class="software">Software</th><th class="status">Certified</th><th>OpenSSF</th></tr>
+      </thead>
+      <tbody>
+      {% for mc in model_cards %}
+        <tr>
+          <td>{{ mc.display_name }}</td>
+          {% if mc.model_card_link %}
+          <td><a href="{{ mc.model_card_link }}">Model Card</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
+          {% endif %}
+          {% if mc.software_link %}
+          <td class="software"><a href="{{ mc.software_link }}">ZIP</a></td>
+          {% else %}
+          <td class="software na">—</td>
+          {% endif %}
+          {% if mc.certified == "Yes" %}
+          <td class="status" title="Reproduktion zertifiziert">✅</td>
+          {% else %}
+          <td class="status na" title="Noch nicht zertifiziert">—</td>
+          {% endif %}
+          {% if mc.openssf %}
+          <td><a href="{{ mc.openssf }}">OpenSSF Scorecard</a></td>
+          {% else %}
+          <td class="card-missing">⚠️ missing</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <footer>
     Daten: <a href="data/scores.json">scores.json</a>,
     <a href="data/daily.json">daily.json</a> (Tagesfehler pro Team).
     Spielregeln: Kapitel 12 des Skripts. Bewertungs-Pipeline:
-    <a href="https://github.com/">challenge-leaderboard</a>.
-  </p>
+    <a href="https://github.com/bartzbeielstein/challenge-leaderboard">challenge-leaderboard</a>.
+  </footer>
 </body>
 </html>
