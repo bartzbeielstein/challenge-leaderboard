@@ -53,13 +53,17 @@ teams:
   - id: syntaxerror
     display_name: "Syntaxerror"
     github_handles: [lriethk, timhaeger,linus-thk]
-    group: "ING" 
-    certified: "No" 
+    group: "ING"
+    certified: "No"
+    model_card_link: "https://github.com/linus-thk/syntaxerror-prognose/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/linus-thk/syntaxerror-prognose/archive/refs/heads/main.zip"
   - id: syntaxerror_entsoe
     display_name: "Syntaxerror (ENTSO-E)"
     github_handles: [lriethk, timhaeger,linus-thk]
     group: "ING"
-    certified: "No" 
+    certified: "No"
+    model_card_link: "https://github.com/linus-thk/syntaxerror-prognose/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/linus-thk/syntaxerror-prognose/archive/refs/heads/main.zip" 
   - id: team_fabinalii
     display_name: "Team Fabinalii"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
@@ -81,6 +85,11 @@ teams:
     retired: false   # ab 2026-06-15  reaktiviert
   - id: chronos
     display_name: "chronos"
+    github_handles: [bartzbeielstein]
+    group: "--"
+    certified: "No"
+  - id: macl2l
+    display_name: "MACL2L"
     github_handles: [bartzbeielstein]
     group: "--"
     certified: "No"
@@ -115,6 +124,18 @@ teams:
     retired: true   # ab 2026-06-19 aus Live-Wertung genommen
   - id: team_4_optuna
     display_name: "Team 4 Optuna"
+    github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    group: "--"
+    certified: "No"
+  - id: team_4_xgb
+    display_name: "Team 4 XGBoost"
+    github_handles: [bartzbeielstein]
+    model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
+    group: "--"
+    certified: "No"
+  - id: team_4_catboost
+    display_name: "Team 4 CatBoost"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
@@ -187,11 +208,13 @@ teams:
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
     group: "ING"
     certified: "No"
+    model_card_link: "https://github.com/LennartFrymel-hub/forecast/blob/main/MODEL_CARD.md"
   - id: team_immerzuspaet_entsoe
     display_name: "Team ImmerZuSpaet (ENTSO-E)"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
     group: "ING"
     certified: "No"
+    model_card_link: "https://github.com/LennartFrymel-hub/forecast/blob/main/MODEL_CARD.md"
   - id: team_weather_report
     display_name: "Team Weather Report"
     github_handles: [LaloMohamad, yanickfotsing]
