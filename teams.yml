@@ -93,6 +93,11 @@ teams:
     github_handles: [bartzbeielstein]
     group: "--"
     certified: "No"
+  - id: macl2l_entsoe
+    display_name: "MACL2L (ENTSO-E)"
+    github_handles: [bartzbeielstein]
+    group: "--"
+    certified: "No"
   - id: team_4_ch14
     display_name: "Team 4 SpotOptim (Ch 14)"
     github_handles: [bartzbeielstein]
