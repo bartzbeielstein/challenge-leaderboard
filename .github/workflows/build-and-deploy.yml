@@ -1,9 +1,16 @@
 name: Build & Deploy Leaderboard
 
 on:
-  workflow_run:
-    workflows: ["Daily Scoring"]
-    types: [completed]
+  # ACHTUNG: Kein `workflow_run`-Trigger auf "Daily Scoring"!
+  # Daily Scoring pusht den Score-Stand nicht direkt nach `main`, sondern öffnet
+  # einen Bot-PR, den `auto-merge.yml` (GitHub-App-Token) mergt. Ein
+  # `workflow_run`-Build feuert daher BEVOR dieser Merge landet und rendert die
+  # Seite aus dem veralteten (Pre-Merge-)Stand. Er konkurriert dann mit dem
+  # korrekten `push`-Build unten in der gemeinsamen "pages"-Concurrency-Gruppe;
+  # einer verliert mit „Deployment failed, try again later", und im Zweifel
+  # gewinnt der veraltete Build — die Seite zeigt dann den gerade gewerteten Tag
+  # NICHT an (beobachtet 2026-07-05). Der Auto-Merge-Push auf
+  # `data/scores.parquet` ist der korrekte, eindeutige, race-freie Trigger.
   push:
     branches: [main]
     paths:
@@ -30,7 +37,6 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
