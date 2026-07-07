@@ -77,7 +77,7 @@ teams:
     group: "ING"
     certified: "No"
   - id: team_4
-    display_name: "Team 4 SpotOptim"
+    display_name: "spotoptim lgbm"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
@@ -130,25 +130,25 @@ teams:
     certified: "No"
     retired: true   # ab 2026-06-19 aus Live-Wertung genommen
   - id: team_4_optuna
-    display_name: "Team 4 Optuna"
+    display_name: "optuna lgbm"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
   - id: team_4_xgb
-    display_name: "Team 4 XGBoost"
+    display_name: "spotoptim xgb"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
   - id: team_4_catboost
-    display_name: "Team 4 CatBoost"
+    display_name: "spotoptim catboost"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
   - id: team_4_causal
-    display_name: "Team 4 Causal"
+    display_name: "spotoptim causal"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
