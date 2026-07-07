@@ -12,6 +12,7 @@ sortierte Iteration über Teams/Tage, gerundete Legenden-Metriken.
 """
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -320,7 +321,16 @@ def fig_mean_upr_bar(
 def fig_mae_over_time(
     scores: pd.DataFrame, names: dict[str, str], *, div_id: str = "fig-mae-time"
 ) -> go.Figure | None:
-    """Tages-MAE je Team über die Zeit; LOCF-Punkte als offene Marker."""
+    """Wochenweiser Tages-MAE je Team; Kalenderwoche wählbar.
+
+    Analog zu ``fig_forecast_vs_actual``: alle Kalenderwochen mit Wertungen
+    werden vorgerendert (Default sichtbar: jüngste Woche), innerhalb einer
+    Woche verbindet je Team eine Linie die Tages-MAE (LOCF-Tage als offene
+    Marker). Die Wochenauswahl übernimmt ein Kalender-Widget im Template
+    über ``layout.meta`` (``weeks``, ``weekTraces``, ``weekLabels``,
+    ``weekStart``, ``titlePrefix``); es schaltet clientseitig die
+    ``visible``-Maske. None, wenn keine Scores vorliegen.
+    """
     if scores is None or scores.empty:
         return None
     df = scores.copy()
@@ -328,31 +338,72 @@ def fig_mae_over_time(
     df["mae"] = df["mae"].astype(float)
     if "carried_forward" not in df.columns:
         df["carried_forward"] = False
-    # Team-Reihenfolge: aufsteigend nach mittlerer MAE (wie Leaderboard).
-    order = (df.groupby("team_id")["mae"].mean().sort_values().index.tolist())
+    # ISO-Kalenderwoche je Zieltag ('YYYY-Www' — gleicher Schlüssel wie im
+    # Wochen-Umschalter der Tagesfehler-Tabellen). Echte Timestamps (_dt)
+    # für die Datums-Achse innerhalb der Woche.
+    df["_dt"] = pd.to_datetime(df["target_date"])
+    iso = df["_dt"].dt.isocalendar()
+    df["week"] = (iso["year"].astype(int).astype(str) + "-W"
+                  + iso["week"].astype(int).map("{:02d}".format))
+
+    # Team-Reihenfolge & -Farbe: aufsteigend nach mittlerer MAE (wie das
+    # Leaderboard). Farbe an das Team gebunden, damit sie über Wochen hinweg
+    # stabil bleibt (Trace-Einfügereihenfolge ist week-major).
+    order = df.groupby("team_id")["mae"].mean().sort_values().index.tolist()
+    color_of = {tid: _team_color(i) for i, tid in enumerate(order)}
+    weeks = sorted(df["week"].unique().tolist())
 
     fig = go.Figure()
-    for ci, team_id in enumerate(order):
-        g = df[df["team_id"] == team_id].sort_values("target_date")
-        symbols = ["circle-open" if c else "circle"
-                   for c in g["carried_forward"]]
-        fig.add_trace(go.Scatter(
-            x=pd.to_datetime(g["target_date"]), y=g["mae"],
-            mode="lines+markers",
-            name=names.get(team_id, team_id),
-            line=dict(color=_team_color(ci), width=2),
-            marker=dict(size=8, symbol=symbols,
-                        line=dict(color=_team_color(ci), width=1.5)),
-            hovertemplate=(names.get(team_id, team_id)
-                           + "<br>%{x|%d.%m.%Y}: MAE %{y:.0f} MW"
-                           + "<extra></extra>"),
-        ))
-    _base_layout(fig, title="MAE-Verlauf je Team", yaxis_title="MAE [MW]")
-    # Echte Datums-Achse (keine Kategorien!): Kategorien erscheinen in
-    # Trace-Einfüge-Reihenfolge — Teams mit unterschiedlichen Tagesmengen
-    # brachten die Tage damit durcheinander. Ticks im deutschen Format.
+    week_trace_idx: dict[str, list[int]] = {w: [] for w in weeks}
+    week_labels: dict[str, str] = {}
+    week_start: dict[str, str] = {}
+    idx = 0
+    for w in weeks:
+        wy, ww = int(w[:4]), int(w[6:])
+        monday = date.fromisocalendar(wy, ww, 1)
+        sunday = date.fromisocalendar(wy, ww, 7)
+        week_start[w] = monday.isoformat()
+        week_labels[w] = (f"KW {ww} · {monday.day:02d}.{monday.month:02d}."
+                          f"–{sunday.day:02d}.{sunday.month:02d}.{sunday.year}")
+        wk = df[df["week"] == w]
+        for team_id in order:
+            g = wk[wk["team_id"] == team_id].sort_values("_dt")
+            if g.empty:
+                continue
+            symbols = ["circle-open" if c else "circle"
+                       for c in g["carried_forward"]]
+            fig.add_trace(go.Scatter(
+                x=g["_dt"], y=g["mae"], mode="lines+markers",
+                name=names.get(team_id, team_id),
+                line=dict(color=color_of[team_id], width=2),
+                marker=dict(size=8, symbol=symbols,
+                            line=dict(color=color_of[team_id], width=1.5)),
+                visible=False,
+                hovertemplate=(names.get(team_id, team_id)
+                               + "<br>%{x|%d.%m.%Y}: MAE %{y:.0f} MW"
+                               + "<extra></extra>"),
+            ))
+            week_trace_idx[w].append(idx)
+            idx += 1
+
+    default_week = weeks[-1]
+    for i in week_trace_idx[default_week]:
+        fig.data[i].visible = True
+
+    _base_layout(fig, title=f"MAE-Verlauf je Team — {week_labels[default_week]}",
+                 yaxis_title="MAE [MW]")
+    # Echte Datums-Achse (keine Kategorien!) — chronologisch, deutsche Ticks.
     fig.update_xaxes(type="date", tickformat="%d.%m.%Y",
                      hoverformat="%d.%m.%Y")
+    # Daten fürs Wochen-Kalender-Widget im Template (CR-2: weeks sortiert,
+    # weekTraces in Einfüge- = Sortierreihenfolge).
+    fig.update_layout(meta=dict(
+        weeks=weeks,
+        weekTraces=week_trace_idx,
+        weekLabels=week_labels,
+        weekStart=week_start,
+        titlePrefix="MAE-Verlauf je Team",
+    ))
     return fig
 
 
