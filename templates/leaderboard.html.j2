@@ -129,6 +129,22 @@
                      font-weight: 600; cursor: pointer; }
     .cal-day.avail:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
     .cal-day.sel { background: var(--accent); color: #fff; }
+    /* Wochen-Kalender fürs MAE-Verlauf-Chart: KW-Spalte links, ganze Woche
+       als Auswahleinheit (KW-Zahl oder Tag klickbar). */
+    .cal-grid.wk { grid-template-columns: 26px repeat(7, 34px); }
+    .cal-wk-head { align-self: center; text-align: center; font-size: .62rem;
+                   color: var(--muted); text-transform: uppercase;
+                   letter-spacing: .03em; }
+    .cal-wk { height: 34px; font: inherit; font-size: .78rem; font-weight: 700;
+              color: #c6cbd3; background: none; border: none; border-radius: 8px;
+              padding: 0; }
+    .cal-wk.avail { color: var(--accent); cursor: pointer; }
+    .cal-wk.avail:hover { background: var(--accent-soft); }
+    .cal-wk.sel { background: var(--accent); color: #fff; }
+    .cal-day.cur-month { color: var(--ink); }
+    .cal-day.has-data { color: var(--ink); font-weight: 600; cursor: pointer; }
+    .cal-day.has-data:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .cal-day.wk-sel { background: var(--accent-soft); }
     .rank-badge { display: inline-block; min-width: 1.5rem; text-align: center;
                   font-weight: 600; }
     /* Wochen-Umschalter der Tagesfehler-Tabellen; Datums-Header behalten
@@ -469,10 +485,161 @@
   <section class="card">
     <h2>MAE-Verlauf</h2>
     <p class="meta">
-      Tages-MAE je Team über die Zeit. Offene Marker kennzeichnen via LOCF
-      fortgeschriebene Tage (keine frische Submission).
+      Tages-MAE je Team innerhalb einer Kalenderwoche. Offene Marker
+      kennzeichnen via LOCF fortgeschriebene Tage (keine frische Submission).
+      Woche über den Kalender wählbar (KW-Zahl oder Tag anklicken).
     </p>
-    {{ figs.mae_time | safe }}
+    <div class="fig-cal-row">
+      <div class="fig-cal-plot">{{ figs.mae_time | safe }}</div>
+      <div class="cal-row">
+      <div class="cal-wrap" id="cal-mae" hidden>
+        <div class="cal" id="cal-mae-panel" role="group" aria-label="Kalenderwoche wählen">
+          <p class="cal-sel">Woche: <span id="cal-mae-sel"></span></p>
+          <div class="cal-head">
+            <button type="button" class="cal-nav" id="cal-mae-prev"
+                    aria-label="Voriger Monat">‹</button>
+            <span class="cal-title" id="cal-mae-title"></span>
+            <button type="button" class="cal-nav" id="cal-mae-next"
+                    aria-label="Nächster Monat">›</button>
+          </div>
+          <div class="cal-grid wk" id="cal-mae-grid"></div>
+        </div>
+      </div>
+      </div>
+    </div>
+    <script>
+    (function () {
+      "use strict";
+      var MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
+                    "August", "September", "Oktober", "November", "Dezember"];
+      var DOWS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      var tries = 0;
+
+      function init() {
+        var gd = document.getElementById("fig-mae-time");
+        if (!gd || !gd.layout || !gd.layout.meta) {
+          if (tries++ < 100) { setTimeout(init, 50); }
+          return;
+        }
+        var meta = gd.layout.meta;
+        var weeks = meta.weeks || [];
+        if (weeks.length < 2) { return; }  // nur eine Woche -> nichts zu wählen
+
+        var wrap = document.getElementById("cal-mae");
+        var selLabel = document.getElementById("cal-mae-sel");
+        var title = document.getElementById("cal-mae-title");
+        var grid = document.getElementById("cal-mae-grid");
+        var prev = document.getElementById("cal-mae-prev");
+        var next = document.getElementById("cal-mae-next");
+
+        // Montag-ISO -> Wochen-Schlüssel: ordnet Kalenderzeilen der jeweiligen
+        // Woche zu, ohne im Client selbst ISO-Wochen zu rechnen (weekStart
+        // kommt deterministisch aus dem Chart-Meta).
+        var mondayToWeek = {};
+        weeks.forEach(function (w) { mondayToWeek[meta.weekStart[w]] = w; });
+
+        var selected = weeks[weeks.length - 1];
+        var startIso = meta.weekStart[selected];
+        var view = { y: +startIso.slice(0, 4), m: +startIso.slice(5, 7) - 1 };
+        var starts = weeks.map(function (w) { return meta.weekStart[w]; }).sort();
+        var minKey = starts[0].slice(0, 7);
+        var maxKey = starts[starts.length - 1].slice(0, 7);
+
+        function monthKey(y, m) {
+          return y + "-" + String(m + 1).padStart(2, "0");
+        }
+        function isoDate(y, m, d) {
+          return y + "-" + String(m + 1).padStart(2, "0")
+                   + "-" + String(d).padStart(2, "0");
+        }
+
+        function selectWeek(w) {
+          selected = w;
+          var traces = meta.weekTraces[w] || [];
+          var vis = gd.data.map(function (_, i) {
+            return traces.indexOf(i) !== -1;
+          });
+          Plotly.update(gd, { visible: vis },
+                        { "title.text": meta.titlePrefix + " — " + meta.weekLabels[w] });
+          selLabel.textContent = meta.weekLabels[w];
+          renderGrid();
+        }
+
+        function renderGrid() {
+          title.textContent = MONTHS[view.m] + " " + view.y;
+          prev.disabled = monthKey(view.y, view.m) <= minKey;
+          next.disabled = monthKey(view.y, view.m) >= maxKey;
+          grid.textContent = "";
+          // Kopfzeile: KW-Spalte + Mo..So.
+          var kw = document.createElement("span");
+          kw.className = "cal-wk-head";
+          kw.textContent = "KW";
+          grid.appendChild(kw);
+          DOWS.forEach(function (n) {
+            var el = document.createElement("span");
+            el.className = "cal-dow";
+            el.textContent = n;
+            grid.appendChild(el);
+          });
+          // Ganze Wochen (Zeilen), beginnend beim Montag der Woche des
+          // Monatsersten, bis der Monat abgedeckt ist.
+          var first = new Date(Date.UTC(view.y, view.m, 1));
+          var offset = (first.getUTCDay() + 6) % 7;  // Mo = 0
+          var nDays = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
+          var rows = Math.ceil((offset + nDays) / 7);
+          var cur = new Date(Date.UTC(view.y, view.m, 1 - offset));
+          for (var r = 0; r < rows; r++) {
+            var rowMondayIso = isoDate(cur.getUTCFullYear(), cur.getUTCMonth(),
+                                       cur.getUTCDate());
+            var wkey = mondayToWeek[rowMondayIso];
+            var wkBtn = document.createElement("button");
+            wkBtn.type = "button";
+            wkBtn.className = "cal-wk";
+            wkBtn.textContent = wkey ? String(+wkey.slice(6)) : "";
+            if (wkey) {
+              wkBtn.classList.add("avail");
+              if (wkey === selected) { wkBtn.classList.add("sel"); }
+              wkBtn.addEventListener("click", selectWeek.bind(null, wkey));
+            } else {
+              wkBtn.disabled = true;
+            }
+            grid.appendChild(wkBtn);
+            for (var k = 0; k < 7; k++) {
+              var cell = document.createElement("span");
+              cell.className = "cal-day";
+              cell.textContent = cur.getUTCDate();
+              if (cur.getUTCMonth() === view.m) { cell.classList.add("cur-month"); }
+              if (wkey) {
+                cell.classList.add("has-data");
+                if (wkey === selected) { cell.classList.add("wk-sel"); }
+                cell.addEventListener("click", selectWeek.bind(null, wkey));
+              }
+              grid.appendChild(cell);
+              cur.setUTCDate(cur.getUTCDate() + 1);
+            }
+          }
+        }
+
+        function shiftMonth(delta) {
+          var d = new Date(Date.UTC(view.y, view.m + delta, 1));
+          view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+          renderGrid();
+        }
+
+        prev.addEventListener("click", shiftMonth.bind(null, -1));
+        next.addEventListener("click", shiftMonth.bind(null, 1));
+
+        selLabel.textContent = meta.weekLabels[selected];
+        renderGrid();
+        wrap.hidden = false;
+        // Plot wurde vollbreit gerendert, bevor der Kalender erschien —
+        // auf die schmalere Flex-Spalte nachjustieren.
+        Plotly.Plots.resize(gd);
+      }
+
+      init();
+    })();
+    </script>
   </section>
   {% endif %}
 

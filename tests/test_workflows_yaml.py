@@ -1,10 +1,13 @@
 """Static lint of .github/workflows/*.yml.
 
 Pins invariants the live pipeline depends on. The most important one:
-`build-and-deploy.yml`'s `on.workflow_run.workflows` must contain the
-exact `name:` of `score-daily.yml` — a typo there silently breaks the
-auto-rebuild chain, which is the classic mode of failure for this
-kind of two-stage pipeline.
+`build-and-deploy.yml` must rebuild the Pages site from the auto-merge
+`push` that lands `data/scores.parquet` on `main` — and must NOT also
+listen on `workflow_run` of Daily Scoring. Daily Scoring opens a bot PR
+that auto-merge.yml merges, so a `workflow_run` build fires *before* that
+merge (stale, pre-merge data) and races the correct push build on the
+shared "pages" concurrency group; the stale build can win and publish a
+leaderboard missing the day just scored (observed 2026-07-05).
 """
 from __future__ import annotations
 
@@ -69,14 +72,20 @@ def test_score_daily_checks_entsoe_revisions():
     )
 
 
-def test_build_and_deploy_listens_to_score_daily_name_exact():
-    sd = _load("score-daily.yml")
+def test_build_and_deploy_has_no_workflow_run_trigger():
+    # Race guard (see module docstring). build-and-deploy must NOT rebuild on
+    # `workflow_run` of Daily Scoring: that build fires before the bot score-PR
+    # is auto-merged (stale, pre-merge data) and races the correct push build on
+    # the shared "pages" concurrency group, where one deploy loses with
+    # "Deployment failed, try again later" and the stale build can win (observed
+    # 2026-07-05). The auto-merge push to data/scores.parquet is the single,
+    # race-free trigger — covered by test_build_and_deploy_push_paths_*.
     bd = _load("build-and-deploy.yml")
     bd_on = bd[True] if True in bd else bd["on"]
-    listened = bd_on["workflow_run"]["workflows"]
-    assert sd["name"] in listened, (
-        f"build-and-deploy.yml listens to {listened} but score-daily.yml is "
-        f"named {sd['name']!r}; the chain breaks silently if these diverge."
+    assert "workflow_run" not in bd_on, (
+        "build-and-deploy.yml must not use a workflow_run trigger; the Pages "
+        "rebuild is driven by the auto-merge push to data/scores.parquet. "
+        "Re-adding workflow_run reintroduces the stale-deploy race."
     )
 
 

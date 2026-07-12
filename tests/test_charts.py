@@ -309,6 +309,35 @@ def test_mae_over_time_uses_chronological_date_axis_german_ticks():
     assert all("%{x|%d.%m.%Y}" in t.hovertemplate for t in fig.data)
 
 
+def test_mae_over_time_exposes_week_calendar_meta_and_hides_nondefault():
+    # Zwei ISO-Wochen: 2026-06-06 (Sa, KW23) vs. 2026-06-08/09 (Mo/Di, KW24).
+    scores = pd.DataFrame([
+        {"team_id": "team_4", "target_date": "2026-06-06", "mae": 100.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+        {"team_id": "team_4", "target_date": "2026-06-08", "mae": 110.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+        {"team_id": "hot_rod", "target_date": "2026-06-09", "mae": 200.0,
+         "rmse": 1.0, "mape": 1.0, "carried_forward": False},
+    ])
+    fig = charts.fig_mae_over_time(scores, NAMES)
+    meta = fig.layout.meta
+    assert meta["weeks"] == ["2026-W23", "2026-W24"]
+    assert meta["titlePrefix"] == "MAE-Verlauf je Team"
+    # Wochenanfang = Montag der ISO-Woche.
+    assert meta["weekStart"]["2026-W24"] == "2026-06-08"
+    assert meta["weekLabels"]["2026-W24"].startswith("KW 24 · 08.06.–14.06.2026")
+    # Woche→Trace-Indizes: disjunkt, decken alle Traces ab.
+    all_idx = sorted(i for idxs in meta["weekTraces"].values() for i in idxs)
+    assert all_idx == list(range(len(fig.data)))
+    # Default sichtbar = jüngste Woche (KW24: team_4 + hot_rod = 2 Traces).
+    visibilities = [bool(t.visible) for t in fig.data]
+    assert visibilities.count(True) == 2
+    for i in meta["weekTraces"]["2026-W24"]:
+        assert fig.data[i].visible
+    for i in meta["weekTraces"]["2026-W23"]:
+        assert not fig.data[i].visible
+
+
 # --------------------------------------------------------------------------
 # Embedding
 # --------------------------------------------------------------------------
