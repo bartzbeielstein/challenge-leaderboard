@@ -71,11 +71,17 @@ teams:
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
     group: "ING"
     certified: "No"
+    model_card_link: "https://github.com/akievi/challenge-leaderboard/blob/main/submissions/team_fabinalii/MODEL_CARD.md"
+    software_link: "https://github.com/akievi/challenge-leaderboard/releases/download/repro-team_fabinalii-2026-06-27/team_fabinalii-repro-2026-06-27.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
   - id: team_fabinalii_entsoe
     display_name: "Team Fabinalii (ENTSO-E)"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
     group: "ING"
     certified: "No"
+    model_card_link: "https://github.com/akievi/challenge-leaderboard/blob/main/submissions/team_fabinalii/MODEL_CARD.md"
+    software_link: "https://github.com/akievi/challenge-leaderboard/releases/download/repro-team_fabinalii-2026-06-27/team_fabinalii-repro-2026-06-27.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
   - id: team_4
     display_name: "spotoptim lgbm"
     github_handles: [bartzbeielstein]
