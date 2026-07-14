@@ -39,6 +39,13 @@
 #                                          # scripts/apply_joker.py (setzt
 #                                          # diesen Schlüssel selbst); siehe
 #                                          # README "Joker-Regel".
+#       about_models: false                # optional: false = keine Zeile in
+#                                          # "About the Models" und Strich in
+#                                          # der Status-Spalte (statt Warn-
+#                                          # Icon). Für Einträge ohne eigenes
+#                                          # Modell, z. B. die ENTSO-E-
+#                                          # Geschwister-Einträge; das Team
+#                                          # bleibt im Leaderboard gelistet.
 #       retired: true                      # optional: Team nimmt nicht mehr am
 #                                          # Live-Wettbewerb teil (z. B. durch
 #                                          # Nachfolger ersetzt). Neue Submissions
@@ -60,6 +67,7 @@ teams:
     certified: "No"
     joker: false
   - id: a_team_entsoe
+    about_models: false
     display_name: "Das A Team (ENTSO-E)"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
     group: "ING" 
@@ -75,6 +83,7 @@ teams:
     software_link: "https://github.com/linus-thk/syntaxerror-prognose/archive/refs/heads/main.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/linus-thk/syntaxerror-prognose"
   - id: syntaxerror_entsoe
+    about_models: false
     display_name: "Syntaxerror (ENTSO-E)"
     github_handles: [lriethk, timhaeger,linus-thk]
     group: "ING"
@@ -93,6 +102,7 @@ teams:
     software_link: "https://github.com/akievi/challenge-leaderboard/releases/download/repro-team_fabinalii-2026-06-27/team_fabinalii-repro-2026-06-27.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
   - id: team_fabinalii_entsoe
+    about_models: false
     display_name: "Team Fabinalii (ENTSO-E)"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
     group: "ING"
@@ -191,6 +201,7 @@ teams:
     certified: "No"
     joker: false
   - id: team_4_optuna_entsoe
+    about_models: false
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
@@ -212,6 +223,7 @@ teams:
     certified: "No"
     joker: false
   - id: neura_entsoe
+    about_models: false
     display_name: "Team Neura (ENTSO-E)"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
     group: "AIT"
@@ -227,6 +239,7 @@ teams:
     openssf: "https://scorecard.dev/viewer/?uri=github.com/SoheilAyati/Hot-Rod-Public"
     joker: false
   - id: hot_rod_entsoe
+    about_models: false
     display_name: "Hot Rod (ENTSO-E)"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
     group: "AIT"
@@ -242,6 +255,7 @@ teams:
     certified: "No"
     joker: false
   - id: ddkast_entsoe
+    about_models: false
     display_name: "DDKAST (ENTSO-E)"
     github_handles: [bachmak, KareemYassen, INDYROD]
     group: "AIT"
@@ -257,6 +271,7 @@ teams:
     openssf: "https://scorecard.dev/viewer/?uri=github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model"
     joker: false
   - id: eigen_squad_entsoe
+    about_models: false
     display_name: "Eigen-Squad (ENTSO-E)"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
     group: "AIT"
@@ -272,6 +287,7 @@ teams:
     certified: "No"
     joker: false
   - id: team_gladiators_entsoe
+    about_models: false
     display_name: "Team Gladiators (ENTSO-E)"
     github_handles: [gauravlokhande1100-prog]
     group: "AIT"
@@ -286,6 +302,7 @@ teams:
     openssf: "https://scorecard.dev/viewer/?uri=github.com/LennartFrymel-hub/forecast"
     joker: false
   - id: team_immerzuspaet_entsoe
+    about_models: false
     display_name: "Team ImmerZuSpaet (ENTSO-E)"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
     group: "ING"
@@ -300,6 +317,7 @@ teams:
     certified: "No"
     joker: false
   - id: team_weather_report_entsoe
+    about_models: false
     display_name: "Team Weather Report (ENTSO-E)"
     github_handles: [LaloMohamad, yanickfotsing]
     group: "ING"
@@ -312,6 +330,7 @@ teams:
     certified: "No"
     joker: "2026-07-12"
   - id: voltrion_entsoe
+    about_models: false
     display_name: "Voltrion (ENTSO-E)"
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
     group: "ING"

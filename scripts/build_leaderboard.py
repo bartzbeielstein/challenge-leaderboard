@@ -78,7 +78,9 @@ def load_model_cards() -> list[dict[str, str | None]]:
     mit Warn-Icon (analog zur Model Card). Pseudo-Teams (z. B. ``entsoe``)
     submitten kein eigenes Modell und entfallen; Retired-Teams (``retired:
     true``, durch Nachfolger ersetzt) nehmen nicht mehr teil und entfallen
-    ebenfalls.
+    ebenfalls. Teams mit ``about_models: false`` (z. B. die
+    ENTSO-E-Geschwister-Einträge, die kein eigenes Modell beschreiben)
+    werden ausgeblendet, bleiben aber im Leaderboard.
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return [
@@ -89,6 +91,7 @@ def load_model_cards() -> list[dict[str, str | None]]:
          "openssf": t.get("openssf")}
         for t in (data.get("teams") or [])
         if not t.get("pseudo", False) and not t.get("retired", False)
+        and t.get("about_models", True)
     ]
 
 
@@ -100,11 +103,14 @@ def load_artifact_status() -> dict[str, bool | None]:
     wenn alle drei Artefakte vorliegen: ``model_card_link`` gesetzt,
     ``software_link`` gesetzt und ``certified == "Yes"``. ``False`` =
     mindestens ein Artefakt fehlt (Warn-Icon), ``None`` für Pseudo-Teams
-    (kein eigenes Modell → Strich statt Warnung).
+    und für Teams mit ``about_models: false`` (kein eigenes Modell →
+    Strich statt Warnung; synchron zur ausgeblendeten Zeile in „About
+    the Models").
     """
     data = yaml.safe_load(TEAMS_PATH.read_text())
     return {
         t["id"]: (None if t.get("pseudo", False)
+                  or not t.get("about_models", True)
                   else (bool(t.get("model_card_link"))
                         and bool(t.get("software_link"))
                         and t.get("certified") == "Yes"))
