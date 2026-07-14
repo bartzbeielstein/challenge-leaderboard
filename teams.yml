@@ -30,11 +30,13 @@
 #                                          # oder false = Joker noch verfügbar;
 #                                          # nach Einsatz das ISO-Datum des er-
 #                                          # setzten Zieltages. Jedes Team darf
-#                                          # genau EINEN Joker einsetzen (eine
-#                                          # bereits bewertete Submission durch
-#                                          # eine aktualisierte Prognose er-
-#                                          # setzen). Anwendung ausschließlich
-#                                          # via scripts/apply_joker.py (setzt
+#                                          # genau EINEN Joker einsetzen (einen
+#                                          # bereits bewerteten Zieltag — auch
+#                                          # einen LOCF-Tag ohne eigene Submis-
+#                                          # sion — durch eine aktualisierte
+#                                          # Prognose korrigieren). Anwendung
+#                                          # ausschließlich via
+#                                          # scripts/apply_joker.py (setzt
 #                                          # diesen Schlüssel selbst); siehe
 #                                          # README "Joker-Regel".
 #       retired: true                      # optional: Team nimmt nicht mehr am

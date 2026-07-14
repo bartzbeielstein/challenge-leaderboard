@@ -5,12 +5,13 @@ data/scores.parquet. Abgedeckt:
 
   * Happy Path — CSV ersetzt, teams.yml markiert, genau EINE Score-Zeile
     neu bewertet, alle anderen Zeilen byte-identisch
+  * LOCF-Tag ohne eigene Submission — Joker legt die Datei neu an
   * Kommentar-Erhalt in teams.yml (kein yaml.dump-Round-Trip)
   * ``joker: false`` zählt als verfügbar und wird in-place ersetzt
-  * Ablehnungen: Joker bereits eingesetzt (4), kein existierender
-    Zieltag (4), Zieltag nicht bewertet (4), Schema-Verstoß (1),
-    Pseudo-/Retired-Team (3), Ist-Werte unvollständig (RuntimeError) —
-    jeweils OHNE Mutation (CR-3: kein halber Joker)
+  * Ablehnungen: Joker bereits eingesetzt (4), Zieltag nicht bewertet
+    (4), Schema-Verstoß (1), Pseudo-/Retired-Team (3), Ist-Werte
+    unvollständig (RuntimeError) — jeweils OHNE Mutation (CR-3: kein
+    halber Joker)
 """
 from __future__ import annotations
 
@@ -193,7 +194,38 @@ def test_joker_already_used_rejected(joker_repo):
     assert snapshot(joker_repo) == before
 
 
-def test_joker_never_creates_new_submission_day(joker_repo):
+def test_joker_fills_locf_scored_day(joker_repo):
+    """LOCF-bewerteter Tag ohne eigene Submission: Joker legt die Datei an."""
+    locf_day = "2026-06-24"
+    scores_path = joker_repo / "data" / "scores.parquet"
+    locf = score_row("team_4", locf_day, 12000.0)
+    locf.update(carried_forward=True, source_date=DAY)
+    pd.concat([pd.read_parquet(scores_path), pd.DataFrame([locf])],
+              ignore_index=True).to_parquet(scores_path, index=False)
+    actuals_path = joker_repo / "data" / "actual_load.parquet"
+    day_actuals = pd.DataFrame({
+        "timestamp_utc": hourly_stamps(locf_day),
+        "load_mw": [41000.0 + i for i in range(24)],
+        "entsoe_forecast_mw": [39000.0] * 24,
+    })
+    pd.concat([pd.read_parquet(actuals_path), day_actuals],
+              ignore_index=True).to_parquet(actuals_path, index=False)
+    write_joker_csv(joker_repo, "team_4", locf_day,
+                    [41000.0 + i for i in range(24)])
+
+    result = aj.apply_joker("team_4", locf_day, repo_root=joker_repo)
+
+    sub = joker_repo / "submissions" / "team_4" / f"{locf_day}.csv"
+    assert sub.exists()  # Datei wurde neu angelegt
+    assert result["before"]["carried_forward"] is True
+    assert result["after"]["carried_forward"] is False
+    assert result["after"]["source_date"] == locf_day
+    assert result["after"]["mae"] == pytest.approx(0.0)
+    assert load_teams(joker_repo / "teams.yml")["team_4"]["joker"] == locf_day
+
+
+def test_joker_unscored_missing_day_rejected(joker_repo):
+    """Weder Submission noch Score-Zeile: kein Joker (Exit 4), keine Datei."""
     missing_day = "2026-06-25"
     write_joker_csv(joker_repo, "team_4", missing_day,
                     [40000.0 + i for i in range(24)])

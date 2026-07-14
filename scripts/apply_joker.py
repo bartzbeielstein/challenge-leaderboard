@@ -1,23 +1,24 @@
 """apply_joker.py
 
 Joker-Regel anwenden: jedes Team darf während der gesamten Challenge
-genau EINEN Joker einsetzen und damit die Prognose-CSV EINES bereits
-eingereichten und bereits bewerteten Zieltages durch eine aktualisierte
-Prognose ersetzen. Der Tag wird anschließend gegen die committeten
-Ist-Werte (``data/actual_load.parquet``) neu bewertet — kein
-ENTSO-E-Abruf, keine Änderung an anderen Tagen oder Teams
-(chirurgische Einzel-Neubewertung, analog zur Idempotenz von
+genau EINEN Joker einsetzen und damit EINEN bereits bewerteten Zieltag
+durch eine aktualisierte Prognose korrigieren. Das schließt per LOCF
+bewertete Tage ohne eigene Submission ein — die Datei
+``submissions/<team>/<datum>.csv`` wird dann neu angelegt. Der Tag wird
+anschließend gegen die committeten Ist-Werte
+(``data/actual_load.parquet``) neu bewertet — kein ENTSO-E-Abruf,
+keine Änderung an anderen Tagen oder Teams (chirurgische
+Einzel-Neubewertung, analog zur Idempotenz von
 ``score_day.append_scores``: letzte Zeile gewinnt).
 
 Ablauf (alle Checks VOR der ersten Mutation — CR-3: kein halber Joker):
   1. Team registriert, kein Pseudo-/Retired-Team (Exit 3)
   2. Joker noch verfügbar (Exit 4)
-  3. Submission des Zieltages existiert — der Joker legt nie einen
-     neuen Tag an (Exit 4)
-  4. Zieltag bereits bewertet (Exit 4)
-  5. Ersatz-CSV besteht dieselben Schema-Checks wie eine reguläre
+  3. Zieltag bereits bewertet (Exit 4) — auch ein LOCF-bewerteter Tag
+     qualifiziert; nicht bewertete Tage nicht
+  4. Ersatz-CSV besteht dieselben Schema-Checks wie eine reguläre
      Submission (Exit 1)
-  6. Committete Ist-Werte des Tages vollständig (Exit 5)
+  5. Committete Ist-Werte des Tages vollständig (Exit 5)
 Danach: CSV ersetzen, ``joker: "<datum>"`` in teams.yml setzen,
 Tag neu bewerten, Vorher/Nachher ausgeben.
 
@@ -33,8 +34,7 @@ Exit-Codes:
   0 — Joker angewendet
   1 — Schema-Verstoß der Ersatz-CSV
   3 — Team unbekannt / Pseudo / Retired
-  4 — Joker-Regel verletzt (bereits eingesetzt, kein existierender
-      Zieltag, Zieltag nicht bewertet)
+  4 — Joker-Regel verletzt (bereits eingesetzt, Zieltag nicht bewertet)
   5 — committete Ist-Werte des Zieltages unvollständig
 """
 from __future__ import annotations
@@ -108,7 +108,7 @@ def existing_score_row(
         raise SubmissionInvalid(
             4,
             f"Zieltag {target_date} ist für '{team_id}' (noch) nicht "
-            f"bewertet — der Joker ersetzt nur bereits bewertete Tage",
+            f"bewertet — der Joker korrigiert nur bereits bewertete Tage",
         )
     return rows.iloc[-1].to_dict()
 
@@ -145,18 +145,14 @@ def apply_joker(
     # --- alle Checks vor der ersten Mutation -------------------------------
     team = check_team_registry(team_id, load_teams(teams_yml))
     check_joker_available(team)
-    if not sub_path.exists():
-        raise SubmissionInvalid(
-            4,
-            f"Keine bestehende Submission unter "
-            f"submissions/{team_id}/{target_date}.csv — der Joker ersetzt "
-            f"nur existierende Zieltage, er legt keine neuen an",
-        )
     before = existing_score_row(scores_path, team_id, target_date)
     validate_schema(joker_csv, target_date)
     actual = load_stored_actual(target_date, actuals_path)
 
     # --- Mutationen ---------------------------------------------------------
+    # Bei einem LOCF-bewerteten Tag existiert noch keine Datei — der
+    # Joker legt sie an (einzige Ausnahme vom Deadline-Regime).
+    sub_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(joker_csv, sub_path)
     mark_joker_used(teams_yml, team_id, target_date)
     forecast = pd.read_csv(sub_path)["forecast_mw"].to_numpy(dtype=float)

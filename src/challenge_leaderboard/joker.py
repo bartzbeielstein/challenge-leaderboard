@@ -1,16 +1,15 @@
 """challenge_leaderboard.joker — one-joker-per-team rule helpers.
 
 Jedes Team darf während der gesamten Challenge genau EINEN Joker
-einsetzen: die Prognose-CSV eines bereits eingereichten und bereits
-bewerteten Zieltages wird durch eine aktualisierte Prognose ersetzt
-(Anwendung: ``scripts/apply_joker.py``). Buchführung in ``teams.yml``
+einsetzen: ein bereits bewerteter Zieltag — auch ein per LOCF
+bewerteter Tag ohne eigene Submission — wird durch eine aktualisierte
+Prognose korrigiert (Anwendung: ``scripts/apply_joker.py``). Buchführung in ``teams.yml``
 über den Schlüssel ``joker``: fehlt oder ``false`` = Joker verfügbar;
 nach Einsatz das ISO-Datum des ersetzten Zieltages, z. B.
 ``joker: "2026-06-22"``.
 
 Exit-code contract (extends the 1–3 contract in ``validation.py``):
-  4 — Joker-Regel verletzt (bereits eingesetzt, kein existierender
-      Zieltag, Zieltag nicht bewertet)
+  4 — Joker-Regel verletzt (bereits eingesetzt, Zieltag nicht bewertet)
 
 All public functions RAISE SubmissionInvalid instead of calling
 sys.exit; CLI scripts convert to process exit codes.
