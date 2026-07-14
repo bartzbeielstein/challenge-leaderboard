@@ -310,7 +310,7 @@ teams:
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
     group: "ING"
     certified: "No"
-    joker: false
+    joker: "2026-07-12"
   - id: voltrion_entsoe
     display_name: "Voltrion (ENTSO-E)"
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
