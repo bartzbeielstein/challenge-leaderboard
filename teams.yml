@@ -26,6 +26,26 @@
 #                                          # (Spalte "OpenSSF" in "About the
 #                                          # Models"); ohne ihn "missing" + Warn-
 #                                          # Icon (analog zur Model Card)
+#       joker: "<YYYY-MM-DD>"              # optional: Joker-Buchführung. Fehlt
+#                                          # oder false = Joker noch verfügbar;
+#                                          # nach Einsatz das ISO-Datum des er-
+#                                          # setzten Zieltages. Jedes Team darf
+#                                          # genau EINEN Joker einsetzen (einen
+#                                          # bereits bewerteten Zieltag — auch
+#                                          # einen LOCF-Tag ohne eigene Submis-
+#                                          # sion — durch eine aktualisierte
+#                                          # Prognose korrigieren). Anwendung
+#                                          # ausschließlich via
+#                                          # scripts/apply_joker.py (setzt
+#                                          # diesen Schlüssel selbst); siehe
+#                                          # README "Joker-Regel".
+#       about_models: false                # optional: false = keine Zeile in
+#                                          # "About the Models" und Strich in
+#                                          # der Status-Spalte (statt Warn-
+#                                          # Icon). Für Einträge ohne eigenes
+#                                          # Modell, z. B. die ENTSO-E-
+#                                          # Geschwister-Einträge; das Team
+#                                          # bleibt im Leaderboard gelistet.
 #       retired: true                      # optional: Team nimmt nicht mehr am
 #                                          # Live-Wettbewerb teil (z. B. durch
 #                                          # Nachfolger ersetzt). Neue Submissions
@@ -45,24 +65,30 @@ teams:
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
     group: "ING"
     certified: "No"
+    joker: false
   - id: a_team_entsoe
+    about_models: false
     display_name: "Das A Team (ENTSO-E)"
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
     group: "ING" 
     certified: "No" 
+    joker: false
   - id: syntaxerror
     display_name: "Syntaxerror"
     github_handles: [lriethk, timhaeger,linus-thk]
     group: "ING"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Das A Team, Review 2026-07-09
+    joker: "2026-06-29"
     model_card_link: "https://github.com/linus-thk/syntaxerror-prognose/blob/main/MODEL_CARD.md"
     software_link: "https://github.com/linus-thk/syntaxerror-prognose/archive/refs/heads/main.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/linus-thk/syntaxerror-prognose"
   - id: syntaxerror_entsoe
+    about_models: false
     display_name: "Syntaxerror (ENTSO-E)"
     github_handles: [lriethk, timhaeger,linus-thk]
     group: "ING"
     certified: "No"
+    joker: false
     model_card_link: "https://github.com/linus-thk/syntaxerror-prognose/blob/main/MODEL_CARD.md"
     software_link: "https://github.com/linus-thk/syntaxerror-prognose/archive/refs/heads/main.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/linus-thk/syntaxerror-prognose"
@@ -71,11 +97,20 @@ teams:
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
     group: "ING"
     certified: "No"
+    joker: "2026-06-22"
+    model_card_link: "https://github.com/akievi/challenge-leaderboard/blob/main/submissions/team_fabinalii/MODEL_CARD.md"
+    software_link: "https://github.com/akievi/challenge-leaderboard/releases/download/repro-team_fabinalii-2026-06-27/team_fabinalii-repro-2026-06-27.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
   - id: team_fabinalii_entsoe
+    about_models: false
     display_name: "Team Fabinalii (ENTSO-E)"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
     group: "ING"
     certified: "No"
+    joker: false
+    model_card_link: "https://github.com/akievi/challenge-leaderboard/blob/main/submissions/team_fabinalii/MODEL_CARD.md"
+    software_link: "https://github.com/akievi/challenge-leaderboard/releases/download/repro-team_fabinalii-2026-06-27/team_fabinalii-repro-2026-06-27.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
   - id: team_4
     display_name: "spotoptim lgbm"
     github_handles: [bartzbeielstein]
@@ -83,6 +118,7 @@ teams:
     software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-team4-2026-06-08/team4-repro-2026-06-08.zip"
     group: "--"
     certified: "No"
+    joker: false
     openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
     retired: false   # ab 2026-06-15  reaktiviert
   - id: chronos
@@ -90,21 +126,25 @@ teams:
     github_handles: [bartzbeielstein]
     group: "--"
     certified: "No"
+    joker: false
   - id: macl2l
     display_name: "MACL2L"
     github_handles: [bartzbeielstein]
     group: "--"
     certified: "No"
+    joker: false
   - id: macl2l_entsoe
     display_name: "MACL2L (ENTSO-E)"
     github_handles: [bartzbeielstein]
     group: "--"
     certified: "No"
+    joker: false
   - id: team_4_ch14
     display_name: "Team 4 SpotOptim (Ch 14)"
     github_handles: [bartzbeielstein]
     group: "--"
     certified: "No"
+    joker: false
     retired: true   # nicht bewertet, nur demo aus Ch. 14
   - id: team_4_entsoe
     display_name: "Team 4 SpotOptim (ENTSO-E)"
@@ -112,6 +152,7 @@ teams:
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    joker: false
     retired: true   # ab 2026-06-10 ersetzt durch team_4_entsoe_4zones
   - id: team_4_4zones
     display_name: "Team 4 Zones SpotOptim"
@@ -122,6 +163,7 @@ teams:
     certified: "No"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/sequential-parameter-optimization/spotforecast2-safe"
     retired: true   # ab 2026-06-19 aus Live-Wertung genommen
+    joker: false
   - id: team_4_entsoe_4zones
     display_name: "Team 4 Zones SpotOptim (ENTSO-E)"
     github_handles: [bartzbeielstein]
@@ -129,36 +171,43 @@ teams:
     group: "--"
     certified: "No"
     retired: true   # ab 2026-06-19 aus Live-Wertung genommen
+    joker: false
   - id: team_4_optuna
     display_name: "optuna lgbm"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    joker: false
   - id: team_4_xgb
     display_name: "spotoptim xgb"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    joker: false
   - id: team_4_catboost
     display_name: "spotoptim catboost"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    joker: false
   - id: team_4_causal
     display_name: "spotoptim causal"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    joker: false
   - id: team_4_optuna_entsoe
+    about_models: false
     display_name: "Team 4 Optuna (ENTSO-E)"
     github_handles: [bartzbeielstein]
     model_card_link: "https://github.com/sequential-parameter-optimization/spotforecast2-safe/blob/main/MODEL_CARD.md"
     group: "--"
     certified: "No"
+    joker: false
   # Pseudo-Team: Scores werden zur Build-Zeit direkt aus
   # data/actual_load.parquet (Spalte entsoe_forecast_mw) abgeleitet,
   # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
@@ -166,16 +215,20 @@ teams:
     display_name: "ENTSO-E"
     pseudo: true
     certified: "No"
+    joker: false
   - id: neura
     display_name: "Team Neura"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
     group: "AIT"
     certified: "No"
+    joker: false
   - id: neura_entsoe
+    about_models: false
     display_name: "Team Neura (ENTSO-E)"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
     group: "AIT"
     certified: "No"
+    joker: false
   - id: hot_rod
     display_name: "Hot Rod"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
@@ -184,7 +237,9 @@ teams:
     model_card_link: "https://github.com/SoheilAyati/Hot-Rod-Public/blob/main/model_cards"
     software_link: "https://github.com/SoheilAyati/Hot-Rod-Public/releases/download/v4.5/voltcrown-v4.5.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/SoheilAyati/Hot-Rod-Public"
+    joker: false
   - id: hot_rod_entsoe
+    about_models: false
     display_name: "Hot Rod (ENTSO-E)"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
     group: "AIT"
@@ -192,67 +247,94 @@ teams:
     model_card_link: "https://github.com/SoheilAyati/Hot-Rod-Public/blob/main/model_cards"
     software_link: "https://github.com/SoheilAyati/Hot-Rod-Public/releases/download/v4.5/voltcrown-v4.5.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/SoheilAyati/Hot-Rod-Public"
+    joker: false
   - id: ddkast
     display_name: "DDKAST"
     github_handles: [bachmak, KareemYassen, INDYROD]
     group: "AIT"
     certified: "No"
+    joker: false
   - id: ddkast_entsoe
+    about_models: false
     display_name: "DDKAST (ENTSO-E)"
     github_handles: [bachmak, KareemYassen, INDYROD]
     group: "AIT"
     certified: "No"
+    joker: false
   - id: eigen_squad
     display_name: "Eigen-Squad"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
     group: "AIT"
     certified: "No"
+    model_card_link: "https://github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model/archive/refs/heads/main.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model"
+    joker: false
   - id: eigen_squad_entsoe
+    about_models: false
     display_name: "Eigen-Squad (ENTSO-E)"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
     group: "AIT"
     certified: "No"
+    joker: false
+    model_card_link: "https://github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model/archive/refs/heads/main.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model"
   - id: team_gladiators
     display_name: "Team Gladiators"
     github_handles: [gauravlokhande1100-prog]
     group: "AIT"
     certified: "No"
+    joker: false
   - id: team_gladiators_entsoe
+    about_models: false
     display_name: "Team Gladiators (ENTSO-E)"
     github_handles: [gauravlokhande1100-prog]
     group: "AIT"
     certified: "No"
+    joker: false
   - id: team_immerzuspaet
     display_name: "Team ImmerZuSpaet"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
     group: "ING"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Voltrion, Review 2026-07-09
     model_card_link: "https://github.com/LennartFrymel-hub/forecast/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/LennartFrymel-hub/forecast/archive/refs/heads/main.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/LennartFrymel-hub/forecast"
+    joker: false
   - id: team_immerzuspaet_entsoe
+    about_models: false
     display_name: "Team ImmerZuSpaet (ENTSO-E)"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
     group: "ING"
     certified: "No"
     model_card_link: "https://github.com/LennartFrymel-hub/forecast/blob/main/MODEL_CARD.md"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/LennartFrymel-hub/forecast"
+    joker: false
   - id: team_weather_report
     display_name: "Team Weather Report"
     github_handles: [LaloMohamad, yanickfotsing]
     group: "ING"
     certified: "No"
+    joker: false
+    model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/submissions/team_weather_report/MODEL_CARD.md"
   - id: team_weather_report_entsoe
+    about_models: false
     display_name: "Team Weather Report (ENTSO-E)"
     github_handles: [LaloMohamad, yanickfotsing]
     group: "ING"
     certified: "No"
+    joker: false
   - id: voltrion
     display_name: "Voltrion"
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
     group: "ING"
     certified: "No"
+    joker: "2026-07-12"
   - id: voltrion_entsoe
+    about_models: false
     display_name: "Voltrion (ENTSO-E)"
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
     group: "ING"
     certified: "No"
+    joker: false

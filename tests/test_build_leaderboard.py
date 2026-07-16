@@ -878,3 +878,36 @@ def test_main_ranks_entsoe_pseudo_in_leaderboard(tmp_path):
     data = json.loads((tmp_path / "public" / "data" / "scores.json").read_text())
     assert "entsoe" in [r["team_id"] for r in data]
     assert "ENTSO-E" in [r["display_name"] for r in data]
+
+
+def _seed_teams_with_about_models_false(tmp_path: Path):
+    import yaml
+    (tmp_path / "teams.yml").write_text(yaml.safe_dump({
+        "teams": [
+            {"id": "team_4", "display_name": "Team 4", "github_handles": []},
+            {"id": "team_4_entsoe", "display_name": "Team 4 (ENTSO-E)",
+             "github_handles": [], "about_models": False},
+            {"id": "macl2l_entsoe", "display_name": "MACL2L (ENTSO-E)",
+             "github_handles": []},
+            {"id": "entsoe", "display_name": "ENTSO-E", "pseudo": True},
+        ]
+    }))
+
+
+def test_load_model_cards_skips_about_models_false(tmp_path):
+    # ENTSO-E-Geschwister-Einträge ohne eigenes Modell werden aus
+    # "About the Models" ausgeblendet; Einträge ohne den Schlüssel bleiben.
+    _seed_teams_with_about_models_false(tmp_path)
+    names = [mc["display_name"] for mc in bl.load_model_cards()]
+    assert names == ["Team 4", "MACL2L (ENTSO-E)"]
+
+
+def test_load_artifact_status_about_models_false_is_none(tmp_path):
+    # Strich statt Warn-Icon in der Status-Spalte — synchron zur
+    # ausgeblendeten "About the Models"-Zeile.
+    _seed_teams_with_about_models_false(tmp_path)
+    status = bl.load_artifact_status()
+    assert status["team_4_entsoe"] is None
+    assert status["team_4"] is False        # Artefakte fehlen -> Warnung
+    assert status["macl2l_entsoe"] is False  # nicht ausgeblendet
+    assert status["entsoe"] is None

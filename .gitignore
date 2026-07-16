@@ -16,3 +16,4 @@ public/data/daily.json
 *.egg-info/
 build/
 dist/
+/certificates
