@@ -17,3 +17,5 @@ public/data/daily.json
 build/
 dist/
 /certificates
+# Urkunden-Werkstatt: private Namen, Signatur, generierte PDFs
+/local
