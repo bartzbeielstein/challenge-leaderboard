@@ -102,7 +102,7 @@ teams:
     display_name: "Team Fabinalii"
     github_handles: [akievi, ffeith-thk, VitaliiZakharuk]
     group: "ING"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Das A Team, Review 2026-07-15
     joker: "2026-06-22"
     model_card_link: "https://github.com/akievi/challenge-leaderboard/blob/main/submissions/team_fabinalii/MODEL_CARD.md"
     software_link: "https://github.com/akievi/challenge-leaderboard/releases/download/repro-team_fabinalii-2026-06-27/team_fabinalii-repro-2026-06-27.zip"
