@@ -234,8 +234,11 @@ teams:
     display_name: "Team Neura"
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
     group: "AIT"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Hot Rod, Review 2026-07-18
     joker: "2026-07-03"
+    model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/modelcard/neura/MODEL_CARD_NEURA.md"
+    software_link: "https://github.com/Shervinfmz/ddmo-sose-26-Team-Neura/archive/refs/heads/main.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/Shervinfmz/ddmo-sose-26-Team-Neura"
   - id: neura_entsoe
     about_models: false
     display_name: "Team Neura (ENTSO-E)"
@@ -243,6 +246,9 @@ teams:
     group: "AIT"
     certified: "No"
     joker: false
+    model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/modelcard/neura/MODEL_CARD_NEURA.md"
+    software_link: "https://github.com/Shervinfmz/ddmo-sose-26-Team-Neura/archive/refs/heads/main.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/Shervinfmz/ddmo-sose-26-Team-Neura"
   - id: hot_rod
     display_name: "Hot Rod"
     github_handles: [soheilayati, msteffge, erikbirkholz, hennioo]
