@@ -1,0 +1,10 @@
+# actionlint 1.7.12 (2026-03) kennt die `client-id`-Eingabe von
+# actions/create-github-app-token@v3 noch nicht — die Action hat `app-id`
+# erst nach dem Daten-Snapshot zugunsten von `client-id` deprecatet.
+# Sobald eine actionlint-Version mit aktualisierten popular-actions-Daten
+# erscheint: Version in ci.yml bumpen und diese Ignores entfernen.
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@v3"'
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3"'
