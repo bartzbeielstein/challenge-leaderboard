@@ -227,7 +227,7 @@ teams:
     github_handles: [Shervinfmz, Mayank07-Git, ravishankarbhojani123-svg]
     group: "AIT"
     certified: "No"
-    joker: false
+    joker: "2026-07-03"
   - id: neura_entsoe
     about_models: false
     display_name: "Team Neura (ENTSO-E)"
