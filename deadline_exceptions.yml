@@ -3,17 +3,8 @@
 # validate_deadline even after the D-1 23:59 UTC cutoff. Scope each entry
 # to a single team and day; remove entries once the day is scored.
 #
-# 2026-07-19: covariate-upgrade night. The sequential submit run adopted the
-# holiday/day-type covariate set (sf2-safe 25.1.0, 24 -> 30 exogenous
-# columns) mid-run; the xgb job and the catboost/causal re-issues with the
-# new configuration cross the UTC cutoff by construction. Exception granted
-# by the challenge owner for these three submissions only.
-- team_id: team_4_xgb
-  target_date: "2026-07-19"
-  reason: sequential submit run crossed the D-1 23:59 UTC cutoff during the covariate-upgrade night
-- team_id: team_4_catboost
-  target_date: "2026-07-19"
-  reason: same-night re-issue with the upgraded 30-column covariate configuration
-- team_id: team_4_causal
-  target_date: "2026-07-19"
-  reason: same-night re-issue with the upgraded 30-column covariate configuration
+# Currently empty. History: three entries for 2026-07-19 (team_4_xgb,
+# team_4_catboost, team_4_causal — the covariate-upgrade night) were
+# granted on 2026-07-19 and retired the same night after all three
+# submissions merged (PRs #1160, #1163, #1164).
+[]
