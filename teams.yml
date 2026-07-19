@@ -335,8 +335,10 @@ teams:
     display_name: "Voltrion"
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
     group: "ING"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Team Weather Report, Review 2026-07-19
     joker: "2026-07-12"
+    model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/modelcard/voltrion/MODEL_CARD_VOLTRION.md"
+    software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-voltrion-2026-07-17/voltrion-repro-2026-07-17.zip"
   - id: voltrion_entsoe
     about_models: false
     display_name: "Voltrion (ENTSO-E)"
@@ -344,3 +346,5 @@ teams:
     group: "ING"
     certified: "No"
     joker: false
+    model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/modelcard/voltrion/MODEL_CARD_VOLTRION.md"
+    software_link: "https://github.com/bartzbeielstein/challenge-leaderboard/releases/download/repro-voltrion-2026-07-17/voltrion-repro-2026-07-17.zip"
