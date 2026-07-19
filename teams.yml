@@ -335,9 +335,11 @@ teams:
     display_name: "Team Weather Report"
     github_handles: [LaloMohamad, yanickfotsing]
     group: "ING"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Voltrion, Review 2026-07-17
     joker: false
     model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/submissions/team_weather_report/MODEL_CARD.md"
+    software_link: "https://github.com/LaloMohamad/weather-report-load-forecast/releases/download/repro-team-weather-report-2026-07-12/team-weather-report-repro-2026-07-12.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/LaloMohamad/weather-report-load-forecast"
   - id: team_weather_report_entsoe
     about_models: false
     display_name: "Team Weather Report (ENTSO-E)"
@@ -345,6 +347,9 @@ teams:
     group: "ING"
     certified: "No"
     joker: false
+    model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/submissions/team_weather_report/MODEL_CARD.md"
+    software_link: "https://github.com/LaloMohamad/weather-report-load-forecast/releases/download/repro-team-weather-report-2026-07-12/team-weather-report-repro-2026-07-12.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/LaloMohamad/weather-report-load-forecast"
   - id: voltrion
     display_name: "Voltrion"
     github_handles: [Malakamz, DarkReaperGT, Malekuti, esmahxhj]
