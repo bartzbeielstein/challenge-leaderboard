@@ -273,7 +273,7 @@ teams:
     github_handles: [bachmak, KareemYassen, INDYROD]
     group: "AIT"
     certified: "No"
-    joker: false
+    joker: "2026-06-01"
   - id: ddkast_entsoe
     about_models: false
     display_name: "DDKAST (ENTSO-E)"
