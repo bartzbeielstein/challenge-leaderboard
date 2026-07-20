@@ -65,7 +65,7 @@ teams:
     github_handles: [obecher,Math1s0,JannhTH,MarkDT551,Kradid655]
     group: "ING"
     certified: "Yes"   # Reproduktions-Zertifikat von Team Fabinalii, Review 2026-07-08
-    joker: false
+    joker: "2026-06-28"
     model_card_link: "https://github.com/Math1s0/numerische-mathematik-th-koeln/blob/main/numerik_ordner/MODEL_CARD.md"
     software_link: "https://downgit.github.io/#/home?url=https://github.com/Math1s0/numerische-mathematik-th-koeln/tree/main/numerik_ordner"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/Math1s0/numerische-mathematik-th-koeln"
