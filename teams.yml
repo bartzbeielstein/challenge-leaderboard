@@ -289,7 +289,7 @@ teams:
     display_name: "Eigen-Squad"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
     group: "AIT"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Team Neura (@Mayank07-Git), Review 2026-07-20, Zieltag 2026-07-14
     model_card_link: "https://github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model/blob/main/MODEL_CARD.md"
     software_link: "https://github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model/archive/refs/heads/main.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/Slakshmi-m/Forecasting-Energy-Consumption-Base-Model"
