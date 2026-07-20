@@ -6,8 +6,12 @@
 #       github_handles: [<gh-handle>, ...] # darf PRs mergen
 #       pseudo: true                       # optional: Pseudo-Team ohne CSV-
 #                                          # Submissions; Scores werden zur
-#                                          # Build-Zeit direkt aus den
-#                                          # ENTSO-E-Daten abgeleitet
+#                                          # Build-Zeit direkt aus den commit-
+#                                          # teten Ist-Daten abgeleitet: die
+#                                          # ENTSO-E-Baseline (entsoe) sowie die
+#                                          # saisonal-naiven Benchmarks
+#                                          # naive24/naive168 (Persistenz aus
+#                                          # load_mw, s. build_leaderboard.py)
 #       model_card_link: <URL>             # optional: Link zur Model Card;
 #                                          # erzeugt eine Zeile in der Sektion
 #                                          # "About the Models" des Leaderboards
@@ -227,6 +231,16 @@ teams:
   # NICHT aus submissions/. Keine github_handles -> keine CSV-PRs.
   - id: entsoe
     display_name: "ENTSO-E"
+    pseudo: true
+    certified: "No"
+    joker: false
+  - id: naive168
+    display_name: "Seasonal naive (168 h)"
+    pseudo: true
+    certified: "No"
+    joker: false
+  - id: naive24
+    display_name: "Seasonal naive (24 h)"
     pseudo: true
     certified: "No"
     joker: false

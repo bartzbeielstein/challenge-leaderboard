@@ -911,3 +911,80 @@ def test_load_artifact_status_about_models_false_is_none(tmp_path):
     assert status["team_4"] is False        # Artefakte fehlen -> Warnung
     assert status["macl2l_entsoe"] is False  # nicht ausgeblendet
     assert status["entsoe"] is None
+
+
+# --------------------------------------------------------------------------
+# Seasonal-naive benchmarks as the ranked pseudo-teams `naive24` / `naive168`.
+# --------------------------------------------------------------------------
+
+def _multiday_actuals(start: str, day_loads: list[float]) -> pd.DataFrame:
+    """Actuals over consecutive days, each hour of day k carrying day_loads[k].
+
+    A seasonal-naive forecast shifts the load by whole days, so the per-day
+    error against a constant-per-day series is exactly the load difference
+    between the target day and its s-hours-earlier lookback day.
+    """
+    frames = []
+    day = pd.Timestamp(f"{start}T00:00:00Z")
+    for load in day_loads:
+        ts = pd.date_range(day, periods=24, freq="h", tz="UTC")
+        frames.append(pd.DataFrame({
+            "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "load_mw": [load] * 24,
+        }))
+        day = day + pd.Timedelta(days=1)
+    return pd.concat(frames, ignore_index=True)
+
+
+def test_naive_pseudo_scores_both_seasons():
+    # 2026-05-26 .. 2026-06-02, load rising 1000, 1100, ..., 1700.
+    loads = [1000.0 + 100 * k for k in range(8)]
+    out = bl.naive_pseudo_scores(_multiday_actuals("2026-05-26", loads),
+                                 {"2026-06-02"})
+    by = {r["team_id"]: r for r in out.to_dict("records")}
+    assert set(by) == {"naive24", "naive168"}
+    # naive24: forecast = load(2026-06-01)=1600 vs actual 1700 -> err -100.
+    assert by["naive24"]["target_date"] == "2026-06-02"
+    assert by["naive24"]["mae"] == 100.0
+    assert by["naive24"]["bias"] == -100.0
+    assert by["naive24"]["upr"] == 100.0        # forecast < actual every hour
+    assert not bool(by["naive24"]["carried_forward"])
+    # naive168: forecast = load(2026-05-26)=1000 vs actual 1700 -> err -700.
+    assert by["naive168"]["mae"] == 700.0
+    assert by["naive168"]["bias"] == -700.0
+
+
+def test_naive_pseudo_scores_respects_scored_dates_and_lookback():
+    loads = [1000.0 + 100 * k for k in range(8)]
+    out = bl.naive_pseudo_scores(_multiday_actuals("2026-05-26", loads),
+                                 {"2026-06-01", "2026-06-02"})
+    got = {(r["team_id"], r["target_date"]) for r in out.to_dict("records")}
+    assert ("naive24", "2026-06-01") in got
+    assert ("naive24", "2026-06-02") in got
+    assert ("naive168", "2026-06-02") in got
+    # 2026-06-01 minus 168 h reaches 2026-05-25, before the first actual.
+    assert ("naive168", "2026-06-01") not in got
+
+
+def test_naive_pseudo_none_when_actuals_missing():
+    assert bl.naive_pseudo_scores(None, {"2026-06-02"}).empty
+
+
+def test_naive_pseudo_none_without_load_column():
+    df = pd.DataFrame({"timestamp_utc": ["2026-05-26T00:00:00Z"]})
+    assert bl.naive_pseudo_scores(df, {"2026-05-26"}).empty
+
+
+def test_naive_pseudo_omits_incomplete_day(capsys):
+    # 2026-05-26 full (24 h); 2026-05-27 only 23 h -> naive24's single
+    # candidate day joins 23 hours and is skipped (with a log line).
+    full = _multiday_actuals("2026-05-26", [1000.0])
+    ts = pd.date_range("2026-05-27T00:00:00Z", periods=23, freq="h", tz="UTC")
+    partial = pd.DataFrame({
+        "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "load_mw": [1100.0] * 23,
+    })
+    out = bl.naive_pseudo_scores(pd.concat([full, partial], ignore_index=True),
+                                 {"2026-05-27"})
+    assert out.empty
+    assert "naive24: 2026-05-27 übersprungen" in capsys.readouterr().out

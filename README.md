@@ -131,6 +131,26 @@ Submissions für Pseudo-Teams lehnt `validate_submission.py` ab, und
 Details und die Formeln in `lecture/12_challenge.qmd` (§
 "Bewertungsmethodik im Detail").
 
+### Saisonal-naive Benchmarks
+
+Zwei triviale Persistenz-Referenzen nehmen ebenfalls als **Pseudo-Teams**
+(`pseudo: true`) am Ranking teil — in allen Tabellen und Figuren:
+
+- `naive24` — „Seasonal naive (24 h)": Prognose(t) = Ist-Last(t − 24 h),
+  also der Vortagswert derselben Stunde.
+- `naive168` — „Seasonal naive (168 h)": Prognose(t) = Ist-Last(t − 168 h),
+  also der Vorwochenwert derselben Stunde.
+
+Ihre Scores werden — wie bei `entsoe` — zur Build-Zeit direkt aus
+`data/actual_load.parquet` (Spalte `load_mw`) abgeleitet
+(`naive_pseudo_scores()` in `scripts/build_leaderboard.py`), über exakt den
+Zeitraum der regulären Teams. Der `s`-Stunden-Rückblick reicht am Anfang der
+Historie vor den ersten committeten Ist-Wert; solche Tage werden
+übersprungen (für Live-Tage ≥ `RESTART_DATE` ist stets genug Vorlauf da).
+Sie dienen als Skill-Untergrenze: jedes echte Modell sollte den
+Wochen-Naive schlagen, und der Tages-Naive liegt mit Abstand am Ende des
+Feldes.
+
 ## Visualisierung des Leaderboards
 
 Zusätzlich zu den Tabellen rendert `scripts/build_leaderboard.py`

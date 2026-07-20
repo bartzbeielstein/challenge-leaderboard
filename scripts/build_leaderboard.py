@@ -362,6 +362,76 @@ def entsoe_pseudo_scores(
     return pd.DataFrame(rows)
 
 
+# Saisonal-naive Benchmarks: Prognose(t) = Ist-Last(t − s h). ``naive24``
+# (Vortag, gleiche Stunde) und ``naive168`` (Vorwoche, gleiche Stunde) sind
+# die trivialen Persistenz-Referenzen der Lastprognose; jedes echte Modell
+# sollte sie schlagen. Reihenfolge: 168 h vor 24 h (der Wochen-Naive ist der
+# stärkere der beiden Benchmarks), rein kosmetisch — gerankt wird nach MAE.
+NAIVE_SEASONS = [(168, "naive168"), (24, "naive24")]
+
+
+def naive_pseudo_scores(
+    actuals: pd.DataFrame | None, scored_dates: set[str]
+) -> pd.DataFrame:
+    """Tages-Scores der saisonal-naiven Pseudo-Teams ``naive24``/``naive168``.
+
+    Prognose(t) = ``load_mw``(t − s h) für s ∈ {24, 168}, direkt aus
+    ``data/actual_load.parquet`` gegen den Ist-Load derselben Stunde — analog
+    zu ``entsoe_pseudo_scores`` zur Build-Zeit aus den committeten Daten
+    abgeleitet (kein API-Key), nicht in ``scores.parquet`` persistiert. Die
+    Ableitung ist **autoritativ**: persistierte Zeilen mit diesen Ids werden
+    in ``main()`` vorab verworfen (beide sind ``pseudo: true`` in teams.yml).
+
+    Zeitraum-Sync wie bei entsoe: nur Tage aus ``scored_dates``. Ein Tag wird
+    übersprungen, wenn nach dem Zeit-Shift < 24 Stunden mit Ist+Referenz
+    vorliegen — das betrifft den Anfang der Historie (der s-Stunden-Rückblick
+    reicht vor den ersten committeten Ist-Wert; für Live-Tage ≥ RESTART_DATE
+    ist stets genug Vorlauf vorhanden). Identische Formeln wie
+    ``score_day.score_submission`` (err = Prognose − Ist).
+    """
+    if (actuals is None or actuals.empty
+            or "load_mw" not in actuals.columns):
+        return pd.DataFrame()
+    al = actuals.dropna(subset=["load_mw"]).copy()
+    if al.empty:
+        return pd.DataFrame()
+    # Zeit-indizierte Ist-Last für den Shift per Zeitstempel (nicht per Zeile —
+    # so bleiben fehlende Stunden echte Lücken statt falsch verschobener Werte).
+    load = pd.Series(
+        al["load_mw"].to_numpy(dtype=float),
+        index=pd.to_datetime(al["timestamp_utc"], utc=True),
+    ).sort_index()
+
+    rows: list[dict] = []
+    for s, name in NAIVE_SEASONS:
+        forecast = load.shift(freq=pd.Timedelta(hours=s))
+        joined = pd.DataFrame({"y": load, "f": forecast}).dropna()
+        joined["target_date"] = joined.index.strftime("%Y-%m-%d")
+        for d, g in joined.groupby("target_date"):
+            if d not in scored_dates:
+                continue
+            if len(g) < 24:
+                print(f"[build] {name}: {d} übersprungen "
+                      f"({len(g)}/24 Stunden Ist+Referenz)")
+                continue
+            actual = g["y"].to_numpy(dtype=float)
+            err = g["f"].to_numpy(dtype=float) - actual
+            nz = actual != 0
+            rows.append({
+                "team_id": name,
+                "target_date": d,
+                "mae": round(float(np.mean(np.abs(err))), 4),
+                "rmse": round(float(np.sqrt(np.mean(err ** 2))), 4),
+                "mape": round(float(np.mean(np.abs(err[nz] / actual[nz])) * 100), 4)
+                        if nz.any() else float("nan"),
+                "bias": round(float(np.mean(err)), 4),
+                "upr": round(float(np.mean(err < 0) * 100), 4),
+                "carried_forward": False,
+                "source_date": d,
+            })
+    return pd.DataFrame(rows)
+
+
 def build_figures(
     board: pd.DataFrame, daily: dict, scores: pd.DataFrame,
     names: dict[str, str], actuals: pd.DataFrame | None,
@@ -531,6 +601,11 @@ def main() -> None:
     pseudo = entsoe_pseudo_scores(actuals, scored)
     if not pseudo.empty:
         scores = pd.concat([scores, pseudo], ignore_index=True)
+    # Saisonal-naive Benchmarks (naive24/naive168) als weitere gerankte
+    # Pseudo-Team-Einträge — dieselbe Ableitung wie entsoe, aus load_mw.
+    naive = naive_pseudo_scores(actuals, scored)
+    if not naive.empty:
+        scores = pd.concat([scores, naive], ignore_index=True)
 
     # Phasen-Trennung (clean restart, s. RESTART_DATE): Mittelwerte des oberen
     # „Leaderboard" und der „Mittlere … je Team"-Balken zählen nur Live-Tage
