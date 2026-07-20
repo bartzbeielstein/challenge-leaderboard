@@ -272,8 +272,10 @@ teams:
     display_name: "DDKAST"
     github_handles: [bachmak, KareemYassen, INDYROD]
     group: "AIT"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Hot Rod (@SoheilAyati), Review 2026-07-20, Zieltag 2026-07-14
     joker: "2026-06-01"
+    model_card_link: "https://github.com/bachmak/ddkast/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/bachmak/ddkast/releases/tag/0.0.1"
   - id: ddkast_entsoe
     about_models: false
     display_name: "DDKAST (ENTSO-E)"
@@ -281,6 +283,8 @@ teams:
     group: "AIT"
     certified: "No"
     joker: false
+    model_card_link: "https://github.com/bachmak/ddkast/blob/main/MODEL_CARD.md"
+    software_link: "https://github.com/bachmak/ddkast/releases/tag/0.0.1"
   - id: eigen_squad
     display_name: "Eigen-Squad"
     github_handles: [Slakshmi-m,kpnair99,hareemmustafa,SereenaJency1042002,Anwarhosenthkoln]
