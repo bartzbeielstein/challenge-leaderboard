@@ -322,8 +322,10 @@ teams:
     display_name: "Team Gladiators"
     github_handles: [gauravlokhande1100-prog]
     group: "AIT"
-    certified: "No"
+    certified: "Yes"   # Reproduktions-Zertifikat von Eigen Squad (@Slakshmi-m), Review 2026-07-20, Zieltag 2026-06-20
     joker: false
+    model_card_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/blob/master/MODEL_CARD_team_gladiators.md"
+    software_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/archive/refs/heads/master.zip"
   - id: team_gladiators_entsoe
     about_models: false
     display_name: "Team Gladiators (ENTSO-E)"
@@ -331,6 +333,8 @@ teams:
     group: "AIT"
     certified: "No"
     joker: false
+    model_card_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/blob/master/MODEL_CARD_team_gladiators.md"
+    software_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/archive/refs/heads/master.zip"
   - id: team_immerzuspaet
     display_name: "Team ImmerZuSpaet"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
