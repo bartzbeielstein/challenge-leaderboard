@@ -360,7 +360,7 @@ teams:
     github_handles: [LaloMohamad, yanickfotsing]
     group: "ING"
     certified: "Yes"   # Reproduktions-Zertifikat von Voltrion, Review 2026-07-17
-    joker: false
+    joker: "2026-07-20"
     model_card_link: "https://github.com/bartzbeielstein/challenge-leaderboard/blob/main/submissions/team_weather_report/MODEL_CARD.md"
     software_link: "https://github.com/LaloMohamad/weather-report-load-forecast/releases/download/repro-team-weather-report-2026-07-12/team-weather-report-repro-2026-07-12.zip"
     openssf: "https://scorecard.dev/viewer/?uri=github.com/LaloMohamad/weather-report-load-forecast"
