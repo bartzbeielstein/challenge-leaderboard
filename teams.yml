@@ -326,6 +326,7 @@ teams:
     joker: false
     model_card_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/blob/master/MODEL_CARD_team_gladiators.md"
     software_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/archive/refs/heads/master.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/gauravlokhande1100-prog/energy-forecast-consumption"
   - id: team_gladiators_entsoe
     about_models: false
     display_name: "Team Gladiators (ENTSO-E)"
@@ -335,6 +336,7 @@ teams:
     joker: false
     model_card_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/blob/master/MODEL_CARD_team_gladiators.md"
     software_link: "https://github.com/gauravlokhande1100-prog/energy-forecast-consumption/archive/refs/heads/master.zip"
+    openssf: "https://scorecard.dev/viewer/?uri=github.com/gauravlokhande1100-prog/energy-forecast-consumption"
   - id: team_immerzuspaet
     display_name: "Team ImmerZuSpaet"
     github_handles: [LennartFrymel-hub, abdulwahabtibi1989-hub, MSamed, fan20251230, steinbrechm]
