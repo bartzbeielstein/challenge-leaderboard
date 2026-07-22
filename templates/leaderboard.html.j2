@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lastprognose-Challenge SoSe26 — Leaderboard</title>
+  <title>Leaderboard SoSe26</title>
   {% if plotlyjs %}<script>{{ plotlyjs | safe }}</script>{% endif %}
   <style>
     :root {
@@ -165,7 +165,7 @@
   <header class="hero">
     <div class="hero-top">
       {% if logo_uri %}<img class="hero-logo" src="{{ logo_uri }}" alt="SpotOptim">{% endif %}
-      <h1>Lastprognose-Challenge SoSe26</h1>
+      <h1>Leaderboard SoSe26</h1>
     </div>
     <p>
       DE-Day-Ahead-Lastprognose im Wettbewerb: bewertet über die mittlere
@@ -173,10 +173,9 @@
       aus der jeweils letzten Prognose fortgeschrieben).
     </p>
     <p class="hero-note">
-      📌 ENTSO-E korrigiert veröffentlichte Ist-Lastwerte gelegentlich
-      nachträglich. Betroffene Zieltage werden dann automatisch neu
-      bewertet — die Platzierungen im Leaderboard können sich dadurch
-      auch rückwirkend ändern.
+      📌 Die Challenge ist beendet. Das Leaderboard ist eingefroren und
+      zeigt den finalen Stand (letzter gewerteter Zieltag: 20.07.2026) —
+      es finden keine weiteren Wertungsläufe oder Neubewertungen statt.
     </p>
     {% if rows %}
     <div class="stats">
